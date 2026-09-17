@@ -1,0 +1,52 @@
+# Python virtual environment
+.venv/
+env/
+venv/
+ENV/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyd
+*.so
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+*_sandbox_*/
+dock_test_*/
+fmpro_test_*/
+
+# Application specific logs & WAL records
+logs/*
+!logs/.gitkeep
+*.log
+rename_log.jsonl
+*_log.jsonl
+
+# Temporary files & ExifTool temp
+*.tmp
+*_exiftool_tmp*
+test_dummy*.mkv
+*~
+.DS_Store
+Thumbs.db
+
+# Test generated sample datasets
+Pictures/
+_Quarantine/
+assets/background/*
+!assets/background/.gitkeep
+
+# VS Code & IDEs
+.vscode/
+.idea/
+
+# Distribution / Packaging
+dist/
+build/
+*.spec
+!filemanagerpro.spec
+*.zip

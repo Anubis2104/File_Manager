@@ -1,0 +1,24 @@
+# ===== GUI =====
+PyQt6>=6.7.0
+
+# ===== Image & RAW Processing =====
+Pillow>=10.4.0
+rawpy>=0.21.0
+opencv-python-headless>=4.9.0
+imagehash>=4.3.2
+scipy>=1.13.0
+
+# ===== Metadata & Audio/Video =====
+piexif>=1.1.3
+mutagen>=1.47.0
+ffmpeg-python>=0.2.0
+
+# ===== File Operations =====
+send2trash>=1.8.3
+
+# ===== Utilities & Logging =====
+loguru>=0.7.2
+tqdm>=4.66.0
+rich>=13.7.0
+numpy>=1.26.0
+

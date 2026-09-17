@@ -1,0 +1,33 @@
+{
+  "rename": {
+    "default_date_format": "DDMMYY",
+    "collision_digits": 3,
+    "sanitize_spaces": true,
+    "strip_metadata_on_rename": false
+  },
+  "duplicate": {
+    "default_engine": "both",
+    "phash_threshold": 10,
+    "embedding_threshold": 0.95,
+    "dinov2_model": "dinov2_vits14",
+    "batch_size": 128
+  },
+  "performance": {
+    "scanner_workers": 16,
+    "use_cuda": true
+  },
+  "tools": {
+    "exiftool_path": "exiftool.exe"
+  },
+  "appearance": {
+    "background_mode": "default",
+    "blur_opacity": 0,
+    "blur_enabled": false,
+    "background_type": "none",
+    "background_file": "",
+    "overlay_opacity": 0.82
+  },
+  "general": {
+    "default_directory": ""
+  }
+}
