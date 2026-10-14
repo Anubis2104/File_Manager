@@ -47,12 +47,14 @@ def compute_sha256(path: Path, chunk_size: int = 1 << 20) -> str:
 # Windows Lock & Permission Handler
 # ─────────────────────────────────────────────
 
-_FILE_ATTRIBUTE_NORMAL = 0x80
+_FILE_ATTRIBUTE_READONLY = 0x01
+_INVALID_FILE_ATTRIBUTES = 0xFFFFFFFF
 
 
 def ensure_writable(path: Path) -> bool:
     """
-    Gỡ bỏ triệt để cờ Read-Only, System, Hidden bằng Win32 API Kernel32 và chmod.
+    Gỡ cờ Read-Only bằng Win32 API Kernel32 và chmod.
+    Giữ nguyên các thuộc tính khác (Hidden, System, Archive...) của người dùng.
     Tự động cấp quyền Full Control qua icacls nếu gặp lỗi phân quyền NTFS.
     An toàn trên cả Windows và non-Windows.
     """
@@ -61,11 +63,15 @@ def ensure_writable(path: Path) -> bool:
             return False
         p_str = str(path.resolve())
 
-        # 1. Reset attributes via Win32 Kernel32 (Windows only)
+        # 1. Clear only the READONLY bit via Win32 Kernel32 (Windows only)
         if sys.platform == "win32":
             try:
                 import ctypes
-                ctypes.windll.kernel32.SetFileAttributesW(p_str, _FILE_ATTRIBUTE_NORMAL)
+                k32 = ctypes.windll.kernel32
+                k32.GetFileAttributesW.restype = ctypes.c_uint32
+                attrs = k32.GetFileAttributesW(p_str)
+                if attrs != _INVALID_FILE_ATTRIBUTES and attrs & _FILE_ATTRIBUTE_READONLY:
+                    k32.SetFileAttributesW(p_str, attrs & ~_FILE_ATTRIBUTE_READONLY)
             except Exception:
                 pass
 
@@ -243,11 +249,14 @@ def safe_long_path(path: Path) -> Path:
 
 class RenameOperation:
     """Represents a single rename/move operation (pending or completed)."""
-    __slots__ = ("src", "dst", "dry_run", "executed", "error", "original_name")
+    __slots__ = ("src", "dst", "orig_src", "dry_run", "executed", "error", "original_name")
 
     def __init__(self, src: Path, dst: Path, dry_run: bool = True, original_name: Optional[str] = None, **kwargs):
         self.src: Path      = src
         self.dst: Path      = dst
+        # Immutable pre-rename path: `src` is overwritten with `dst` after execute(),
+        # so the undo log must record this instead.
+        self.orig_src: Path = src
         self.dry_run: bool  = dry_run
         self.executed: bool = False
         self.error: str | None = None

@@ -10,8 +10,11 @@ from __future__ import annotations
 
 import json
 import os
+import queue
 import subprocess
+import sys
 import tempfile
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -21,6 +24,7 @@ from utils.date_utils import (
     extract_best_date, parse_exif_date, format_date_for_rename,
     resolve_exiftool_exe, _test_exiftool_binary, run_exiftool_utf8
 )
+from utils.safe_log import log_swallowed, safe_log
 
 
 FFMPEG_CONTAINER_EXTS: frozenset[str] = frozenset({
@@ -103,23 +107,23 @@ def strip_video_metadata_with_ffmpeg(filepath: Path | str, ffmpeg_exe: Optional[
             os.replace(temp_out, fp)
             try:
                 os.utime(fp, (orig_atime, orig_mtime))
-            except Exception:
-                pass
+            except Exception as _bare_exc:
+                log_swallowed("METADATA", _bare_exc)
             return True, ""
         else:
             if temp_out.exists():
                 try:
                     temp_out.unlink()
-                except Exception:
-                    pass
+                except Exception as _bare_exc:
+                    log_swallowed("METADATA", _bare_exc)
             err = res.stderr.strip() or "Lỗi FFmpeg không xác định"
             return False, err
     except Exception as exc:
         if temp_out.exists():
             try:
                 temp_out.unlink()
-            except Exception:
-                pass
+            except Exception as _bare_exc:
+                log_swallowed("METADATA", _bare_exc)
         return False, str(exc)
 
 
@@ -191,23 +195,23 @@ def write_video_metadata_with_ffmpeg(
             os.replace(temp_out, fp)
             try:
                 os.utime(fp, (orig_atime, orig_mtime))
-            except Exception:
-                pass
+            except Exception as _bare_exc:
+                log_swallowed("METADATA", _bare_exc)
             return True, ""
         else:
             if temp_out.exists():
                 try:
                     temp_out.unlink()
-                except Exception:
-                    pass
+                except Exception as _bare_exc:
+                    log_swallowed("METADATA", _bare_exc)
             err = res.stderr.strip() or "Lỗi FFmpeg không xác định"
             return False, err
     except Exception as exc:
         if temp_out.exists():
             try:
                 temp_out.unlink()
-            except Exception:
-                pass
+            except Exception as _bare_exc:
+                log_swallowed("METADATA", _bare_exc)
         return False, str(exc)
 
 
@@ -340,7 +344,216 @@ def strip_png_lossless_in_ram(filepath: Path | str) -> tuple[bool, str]:
         return False, str(exc)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# ExifToolDaemon — giữ tiến trình ExifTool sống để tránh cold-start 500ms/file
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ExifToolDaemon:
+    """
+    Wrapper giữ ExifTool chạy liên tục với ``-stay_open True``.
+
+    Thay vì khởi chạy process mới mỗi lần đọc (cold-start ~500ms trên Windows),
+    daemon chỉ khởi động **một lần** rồi gửi lệnh qua stdin.
+    Mỗi lần đọc metadata chỉ mất ~30–80ms.
+
+    Dùng như context manager hoặc gọi thủ công start()/close():
+
+        with ExifToolDaemon(exe) as et:
+            tags = et.read_json(path)
+
+    Thread-safe: sử dụng threading.Lock cho mỗi lệnh.
+    Timeout thực sự: stdout được đọc bởi một thread riêng đẩy vào Queue, nên
+    ExifTool bị treo không thể chặn caller quá ``timeout`` giây.
+    """
+
+    _SENTINEL = b"{ready}"          # ExifTool in viết "{ready}" khi xong mỗi lệnh
+    _SENTINEL_STR = "{ready}"
+
+    def __init__(self, exiftool_exe: str = "exiftool", timeout: float = 30.0):
+        self.exiftool_exe = exiftool_exe
+        self.timeout = timeout
+        self._proc: Optional[subprocess.Popen] = None
+        # One lock for the object's lifetime: replacing it on restart would let two
+        # threads (the global daemon is shared by scanner workers) talk to the pipe at once.
+        self._lock = threading.Lock()
+        self._lines: Optional[queue.Queue] = None   # stdout lines; None item = EOF
+
+    # ── lifecycle ─────────────────────────────────────────────────────────────
+
+    def start(self) -> bool:
+        """Khởi động ExifTool daemon. Trả về True nếu thành công."""
+        if self._proc and self._proc.poll() is None:
+            return True  # Đã chạy
+        try:
+            self._proc = subprocess.Popen(
+                [
+                    self.exiftool_exe,
+                    "-stay_open", "True",
+                    "-@", "-",                  # Đọc lệnh từ stdin
+                    "-charset", "filename=utf8",
+                    "-charset", "exif=utf8",
+                ],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            # Fresh queue per process: lines from a killed process can never leak into the next one
+            self._lines = queue.Queue()
+            threading.Thread(
+                target=self._pump_stdout, args=(self._proc.stdout, self._lines),
+                name="ExifToolDaemon-stdout", daemon=True,
+            ).start()
+            return True
+        except Exception as exc:
+            safe_log("w", "ExifToolDaemon", f"Khong khoi dong daemon: {exc}")
+            self._proc = None
+            return False
+
+    @staticmethod
+    def _pump_stdout(stream, sink: queue.Queue) -> None:
+        """Background reader: forward stdout lines to `sink`, then None at EOF."""
+        try:
+            for line in stream:
+                sink.put(line)
+        except (OSError, ValueError):
+            pass   # pipe closed underneath us by _kill()
+        finally:
+            sink.put(None)
+
+    def close(self) -> None:
+        """Đóng ExifTool daemon."""
+        if self._proc:
+            try:
+                self._proc.stdin.write("-stay_open\nFalse\n")
+                self._proc.stdin.flush()
+                self._proc.wait(timeout=5)
+            except Exception:
+                pass
+            finally:
+                self._kill()
+
+    def _kill(self) -> None:
+        """Stop the process immediately (whole tree on Windows: ExifTool.exe spawns perl)."""
+        proc, self._proc = self._proc, None
+        if proc is None:
+            return
+        if sys.platform == "win32" and proc.poll() is None:
+            try:
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                    capture_output=True, timeout=5,
+                )
+            except Exception:
+                pass
+        for action in (proc.kill, proc.stdin.close, proc.stdout.close):
+            try:
+                action()
+            except Exception:
+                pass
+
+    def is_running(self) -> bool:
+        return self._proc is not None and self._proc.poll() is None
+
+    def __enter__(self) -> "ExifToolDaemon":
+        self.start()
+        return self
+
+    def __exit__(self, *_) -> None:
+        self.close()
+
+    # ── command execution ──────────────────────────────────────────────────────
+
+    def _execute(self, args: list[str]) -> str:
+        """
+        Gửi lệnh tới daemon và đọc kết quả cho đến khi thấy sentinel ``{ready}``.
+        Thread-safe qua Lock.
+        """
+        cmd_str = "\n".join(args) + "\n-execute\n"
+        result_lines: list[str] = []
+
+        with self._lock:
+            # Check/restart under the lock: another thread may have just killed a hung daemon
+            if not self.is_running() and not self.start():
+                return ""
+            try:
+                self._proc.stdin.write(cmd_str)
+                self._proc.stdin.flush()
+
+                deadline = time.monotonic() + self.timeout
+                while True:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise TimeoutError
+                    try:
+                        line = self._lines.get(timeout=remaining)
+                    except queue.Empty:
+                        raise TimeoutError from None
+                    if line is None:          # process exited (EOF)
+                        break
+                    line = line.rstrip("\r\n")
+                    if line == self._SENTINEL_STR:
+                        break
+                    result_lines.append(line)
+            except TimeoutError:
+                # A hung process would desync every later command: drop it; next call restarts.
+                safe_log("w", "ExifToolDaemon", f"Timeout {self.timeout:.0f}s, khoi dong lai daemon: {args[-1]}")
+                self._kill()
+                return ""
+            except Exception as exc:
+                safe_log("w", "ExifToolDaemon", f"Loi giao tiep daemon: {exc}")
+                self.close()
+                return ""
+
+        return "\n".join(result_lines)
+
+    # ── public API ─────────────────────────────────────────────────────────────
+
+    def read_json(self, path: Path) -> dict:
+        """
+        Đọc tất cả metadata của ``path`` dưới dạng dict (JSON).
+        Trả về dict rỗng nếu lỗi.
+        """
+        t0 = time.time()
+        raw = self._execute(["-j", "-G", str(path)])
+        dur_ms = (time.time() - t0) * 1000
+        if not raw:
+            return {}
+        try:
+            data = json.loads(raw)
+            if data and isinstance(data, list):
+                safe_log("d", "ExifToolDaemon", f"{path.name}: {len(data[0])} tags ({dur_ms:.0f}ms daemon)")
+                return data[0]
+        except Exception as exc:
+            safe_log("w", "ExifToolDaemon", f"JSON parse error for {path.name}: {exc}")
+        return {}
+
+
+# Module-level singleton daemon — khởi động lazy khi lần đầu dùng
+_global_daemon: Optional[ExifToolDaemon] = None
+_daemon_lock_init: Optional[object] = None
+
+
+def _get_global_daemon(exiftool_exe: str) -> Optional[ExifToolDaemon]:
+    """Trả về (và khởi động nếu chưa có) singleton ExifToolDaemon."""
+    global _global_daemon, _daemon_lock_init
+    import threading
+    if _daemon_lock_init is None:
+        _daemon_lock_init = threading.Lock()
+    with _daemon_lock_init:
+        if _global_daemon is None or not _global_daemon.is_running():
+            d = ExifToolDaemon(exiftool_exe)
+            if d.start():
+                _global_daemon = d
+            else:
+                _global_daemon = None
+    return _global_daemon
+
+
 class MetadataEngine:
+
     """
     Handles all metadata operations.
 
@@ -386,8 +599,8 @@ class MetadataEngine:
             data["File:FileName"] = path.name
             data["File:FileSize"] = f"{stat.st_size / 1024:.1f} KB" if stat.st_size < 1048576 else f"{stat.st_size / 1048576:.2f} MB"
             data["File:FileModifyDate"] = datetime.fromtimestamp(stat.st_mtime).strftime("%Y:%m:%d %H:%M:%S")
-        except Exception:
-            pass
+        except Exception as _bare_exc:
+            log_swallowed("METADATA", _bare_exc)
 
         # Try Pillow for images
         try:
@@ -408,10 +621,10 @@ class MetadataEngine:
                             for sub_id, sub_val in ifd.items():
                                 sub_name = ExifTags.TAGS.get(sub_id, str(sub_id))
                                 data[f"EXIF:{sub_name}"] = str(sub_val)
-                        except Exception:
-                            pass
-        except Exception:
-            pass
+                        except Exception as _bare_exc:
+                            log_swallowed("METADATA", _bare_exc)
+        except Exception as _bare_exc:
+            log_swallowed("METADATA", _bare_exc)
 
         # Try mutagen for audio/video
         if not any(k.startswith("EXIF:") for k in data):
@@ -427,8 +640,8 @@ class MetadataEngine:
                 if mf and mf.tags:
                     for k, v in mf.tags.items():
                         data[f"Tag:{k}"] = str(v)
-            except Exception:
-                pass
+            except Exception as _bare_exc:
+                log_swallowed("METADATA", _bare_exc)
 
         return data
 
@@ -441,6 +654,19 @@ class MetadataEngine:
         from core.app_logcat import logcat
         t0 = time.time()
         if self.is_exiftool_available():
+            # 1. Fast-path: ExifToolDaemon (-stay_open True) -> ~4-8ms vs 500ms cold start
+            daemon = _get_global_daemon(self.exiftool_exe)
+            if daemon:
+                try:
+                    data = daemon.read_json(path)
+                    if data:
+                        dur = (time.time() - t0) * 1000
+                        logcat.d("CORE:ExifTool", f"Đọc metadata ExifTool (daemon) cho {path.name}: {len(data)} thẻ ({dur:.1f}ms)")
+                        return data
+                except Exception as de:
+                    logcat.w("CORE:ExifTool", f"Lỗi daemon ExifTool cho {path.name}: {de}. Fallback sang subprocess.")
+
+            # 2. Subprocess fallback
             try:
                 r = self._run_exiftool(["-j", "-G", str(path)], timeout=15)
                 if r.returncode == 0 and r.stdout.strip():
@@ -522,8 +748,8 @@ class MetadataEngine:
             try:
                 ts = dt.timestamp()
                 os.utime(path, (ts, ts))
-            except Exception:
-                pass
+            except Exception as _bare_exc:
+                log_swallowed("METADATA", _bare_exc)
             return False, "ExifTool not found."
 
         from utils.file_utils import classify_extension
@@ -560,8 +786,8 @@ class MetadataEngine:
             try:
                 ts = dt.timestamp()
                 os.utime(path, (ts, ts))
-            except Exception:
-                pass
+            except Exception as _bare_exc:
+                log_swallowed("METADATA", _bare_exc)
 
             if r.returncode == 0:
                 return True, ""
@@ -686,8 +912,8 @@ class ArgfileMetadataEngine:
             if tmp_path and os.path.exists(tmp_path):
                 try:
                     os.remove(tmp_path)
-                except Exception:
-                    pass
+                except Exception as _bare_exc:
+                    log_swallowed("METADATA", _bare_exc)
 
     # ─────────────────────────────────────────────
     # Public: batch metadata scan
@@ -727,8 +953,8 @@ class ArgfileMetadataEngine:
             if ok and stdout:
                 try:
                     all_meta.extend(json.loads(stdout))
-                except Exception:
-                    pass
+                except Exception as _bare_exc:
+                    log_swallowed("METADATA", _bare_exc)
 
         return all_meta
 

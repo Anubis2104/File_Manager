@@ -26,6 +26,7 @@ except ImportError:
 
 from utils.cuda_helper import get_torch_device, cuda_available
 from duplicate.phash_engine import DisjointSetUnion
+from utils.safe_log import log_swallowed
 
 
 SUPPORTED_MODELS = {
@@ -297,8 +298,8 @@ class EmbeddingEngine:
                         if max(img.size) > 1024:
                             img.thumbnail((512, 512), PILImage.Resampling.BILINEAR)
                         return self._transform(img)
-            except Exception:
-                pass
+            except Exception as _bare_exc:
+                log_swallowed("EMBEDDING_EN", _bare_exc)
 
             # Fallback 2: RAW camera formats via rawpy
             try:

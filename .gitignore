@@ -18,6 +18,8 @@ htmlcov/
 *_sandbox_*/
 dock_test_*/
 fmpro_test_*/
+test_dataset_path.txt
+test_pipeline.py
 
 # Application specific logs & WAL records
 logs/*

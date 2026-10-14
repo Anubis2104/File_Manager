@@ -7,7 +7,7 @@
   },
   "duplicate": {
     "default_engine": "both",
-    "phash_threshold": 10,
+    "phash_threshold": 5,
     "embedding_threshold": 0.95,
     "dinov2_model": "dinov2_vits14",
     "batch_size": 128

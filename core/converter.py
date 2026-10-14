@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional
 
 from PIL import Image
+from utils.safe_log import log_swallowed
 Image.MAX_IMAGE_PIXELS = None
 
 
@@ -94,8 +95,8 @@ class ImageConverter:
                         exif_data = img.info.get("exif")
                         if exif_data and pil_format in ("JPEG", "WEBP", "PNG"):
                             save_kwargs["exif"] = exif_data
-                    except Exception:
-                        pass
+                    except Exception as _bare_exc:
+                        log_swallowed("CONVERTER", _bare_exc, label="Bỏ qua lỗi")
 
                 img.save(dst, format=pil_format, **save_kwargs)
             return True, ""

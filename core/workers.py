@@ -22,6 +22,7 @@ from core.renamer import RenameEngine, RenameOperation
 from core.metadata import MetadataEngine
 from core.cleaner import FolderCleaner
 from utils.file_utils import RenameOperation as FileRenameOp
+from utils.safe_log import log_swallowed
 
 
 # ─────────────────────────────────────────────────────────────
@@ -155,8 +156,8 @@ class RenameWorker(QObject):
                 if self.logger:
                     try:
                         self.logger.log_rename_op(op)
-                    except Exception:
-                        pass
+                    except Exception as _bare_exc:
+                        log_swallowed("WORKERS", _bare_exc, label="Bỏ qua lỗi")
                 if self.is_cancelled:
                     self.cancelled.emit()
                     return

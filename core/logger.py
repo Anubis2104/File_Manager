@@ -17,6 +17,9 @@ from utils.file_utils import compute_md5, RenameOperation
 
 LOG_VERSION = "1.0"
 
+_PARTIAL_HASH_THRESHOLD = 64 * 1024 * 1024
+_PARTIAL_HASH_BYTES     = 32 * 1024 * 1024
+
 
 class LogEntry:
     """A single operation record in the log file."""
@@ -93,18 +96,26 @@ class RenameLogger:
         self.log_path = log_path
         self.compute_checksums = compute_checksums
 
+    @staticmethod
+    def _log_checksum(path: Path) -> str:
+        """
+        MD5 used for log verification. Files > 64 MB hash only the first 32 MB
+        to avoid disk bottlenecks; the SAME rule must be applied at restore time.
+        """
+        if path.stat().st_size > _PARTIAL_HASH_THRESHOLD:
+            return compute_md5(path, max_bytes=_PARTIAL_HASH_BYTES)
+        return compute_md5(path)
+
     def log_rename_op(self, op: RenameOperation) -> LogEntry:
         """Log a completed (or dry-run) RenameOperation."""
+        # op.src points at the new path once execute() succeeded — use the original.
+        orig_src: Path = getattr(op, "orig_src", op.src)
+
         if self.compute_checksums and not op.dry_run:
-            target = op.dst if op.dst.exists() else op.src
+            target = op.dst if op.dst.exists() else orig_src
             if target.exists():
                 try:
-                    fsize = target.stat().st_size
-                    # For huge files (> 64 MB), limit hash to 32 MB to prevent disk bottlenecks
-                    if fsize > 64 * 1024 * 1024:
-                        checksum_after = compute_md5(target, max_bytes=32 * 1024 * 1024)
-                    else:
-                        checksum_after = compute_md5(target)
+                    checksum_after = self._log_checksum(target)
                 except Exception:
                     checksum_after = ""
                 checksum_before = checksum_after
@@ -116,9 +127,9 @@ class RenameLogger:
         entry = LogEntry(
             timestamp=datetime.now(),
             operation="rename" if not op.dry_run else "dry_rename",
-            src_path=str(op.src),
+            src_path=str(orig_src),
             dst_path=str(op.dst),
-            src_name=op.src.name,
+            src_name=orig_src.name,
             dst_name=op.dst.name,
             checksum_before=checksum_before,
             checksum_after=checksum_after,
@@ -179,44 +190,64 @@ class RenameLogger:
         for i, entry in enumerate(rename_entries):
             if cancel_check and cancel_check():
                 break
-            dst_path = Path(entry.dst_path)
-            src_path = Path(entry.src_path)
-            result = {"entry": entry, "success": False, "error": ""}
-
-            if not dst_path.exists():
-                result["error"] = f"File not found: {dst_path}"
-                results.append(result)
-                continue
-
-            # Optional checksum verification
-            if verify_checksum and entry.checksum_after:
-                current_md5 = compute_md5(dst_path)
-                if current_md5 != entry.checksum_after:
-                    result["error"] = "Checksum mismatch — file may have been modified"
-                    results.append(result)
-                    continue
-
-            try:
-                dst_path.rename(src_path)
-                result["success"] = True
-                # Log the restore operation
-                restore_entry = LogEntry(
-                    timestamp=datetime.now(),
-                    operation="restore",
-                    src_path=str(dst_path),
-                    dst_path=str(src_path),
-                    src_name=dst_path.name,
-                    dst_name=src_path.name,
-                )
-                self._append(restore_entry)
-            except OSError as exc:
-                result["error"] = str(exc)
-
-            results.append(result)
+            results.append(self._restore_entry(entry, verify_checksum))
             if on_progress:
                 on_progress(i + 1, len(rename_entries))
 
         return results
+
+    def _restore_entry(self, entry: LogEntry, verify_checksum: bool) -> dict:
+        """Reverse a single 'rename' entry. Returns {entry, success, error}."""
+        dst_path = Path(entry.dst_path)
+        src_path = Path(entry.src_path)
+        result = {"entry": entry, "success": False, "error": ""}
+
+        if entry.error:
+            # The rename never happened; whatever sits at dst is not ours to move.
+            result["error"] = f"Original rename had failed, nothing to restore: {entry.error}"
+            return result
+
+        if entry.src_path == entry.dst_path:
+            # Logs written before the orig_src fix recorded the new path as src_path.
+            # Compare strings: WindowsPath equality ignores case and would reject
+            # legitimate case-only renames (photo.jpg -> Photo.jpg).
+            result["error"] = (
+                "Nothing to restore: src == dst (no-op rename, or legacy log "
+                "written before the original-name fix)"
+            )
+            return result
+
+        if not dst_path.exists():
+            result["error"] = f"File not found: {dst_path}"
+            return result
+
+        if verify_checksum and entry.checksum_after:
+            try:
+                current = self._log_checksum(dst_path)
+            except OSError as exc:
+                # Locked/deleted mid-restore: fail this entry, keep restoring the rest
+                result["error"] = f"Cannot verify checksum: {exc}"
+                return result
+            if current != entry.checksum_after:
+                result["error"] = "Checksum mismatch — file may have been modified"
+                return result
+
+        try:
+            dst_path.rename(src_path)
+        except OSError as exc:
+            result["error"] = str(exc)
+            return result
+
+        result["success"] = True
+        self._append(LogEntry(
+            timestamp=datetime.now(),
+            operation="restore",
+            src_path=str(dst_path),
+            dst_path=str(src_path),
+            src_name=dst_path.name,
+            dst_name=src_path.name,
+        ))
+        return result
 
 
 # =============================================================================

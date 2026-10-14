@@ -96,9 +96,14 @@ def test_advanced():
         shutil.rmtree(test_dir, ignore_errors=True)
 
     print(f"\n=== Advanced Summary: {passed} PASSED, {failed} FAILED ===")
-    return failed == 0
+    # pytest ignores return values — the suite must assert to be able to fail
+    assert failed == 0, f"{failed} check(s) failed, see [FAIL] lines above"
 
 
 if __name__ == "__main__":
-    success = test_advanced()
-    sys.exit(0 if success else 1)
+    try:
+        test_advanced()
+    except AssertionError as exc:
+        print(exc)
+        sys.exit(1)
+    sys.exit(0)

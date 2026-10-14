@@ -5,10 +5,16 @@ trailing overlay auto-trimming, and header repair.
 """
 from __future__ import annotations
 
+import contextlib
+import datetime
+import hashlib
+import mmap
 import os
+import shutil
 import struct
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
+from utils.safe_log import log_swallowed, safe_log
 
 VALID_MEDIA_EXTS = {'.jpg', '.jpeg', '.png', '.webp', '.mp4', '.mov', '.mkv', '.avi', '.gif', '.bmp', '.tiff'}
 SYSTEM_JUNK_FILES = {'thumbs.db', 'desktop.ini', '.ds_store'}
@@ -35,10 +41,76 @@ def format_bytes(size: int) -> str:
     return f"{size:.2f} PB"
 
 
-def repair_jpeg_header(filepath: Path | str) -> Tuple[bool, str]:
+@contextlib.contextmanager
+def _map_file(fp: Path) -> Iterator[mmap.mmap]:
+    """Read-only memory map: byte search without loading the whole file into RAM."""
+    with open(fp, "rb") as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
+        yield mm
+
+
+def _restore_times(fp: Path, st: os.stat_result) -> None:
+    """
+    Best-effort: keep original atime/mtime (mtime is the date fallback for renaming).
+    Must never turn an already-applied modification into a reported failure.
+    """
+    try:
+        os.utime(fp, (st.st_atime, st.st_mtime))
+    except OSError as exc:
+        safe_log("w", "INSPECTOR", f"Khong giu duoc thoi gian goc cua {fp.name}: {exc}")
+
+
+def _default_backup_dir(fp: Path) -> Path:
+    return fp.parent / "_Quarantine"
+
+
+def _save_removed_bytes(
+    fp: Path, start: int, end: int, backup_dir: Path, kind: str,
+) -> Path:
+    """
+    Copy bytes [start, end) of `fp` into `backup_dir` before they are destroyed,
+    so the original file can be rebuilt (prefix + file, or file + overlay).
+    Raises on failure — callers must NOT modify the file if this fails.
+    """
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    target = backup_dir / f"{fp.name}_{ts}_{kind}.quarantined"
+    counter = 1
+    while target.exists():
+        target = backup_dir / f"{fp.name}_{ts}_{kind}_{counter}.quarantined"
+        counter += 1
+
+    hasher = hashlib.sha256()
+    remaining = end - start
+    with open(fp, "rb") as src, open(target, "wb") as dst:
+        src.seek(start)
+        while remaining > 0:
+            chunk = src.read(min(remaining, 1 << 20))
+            if not chunk:
+                break
+            dst.write(chunk)
+            hasher.update(chunk)
+            remaining -= len(chunk)
+    if remaining:
+        target.unlink(missing_ok=True)
+        raise IOError(f"Short read while backing up {fp.name}")
+
+    log_line = (
+        f"[{datetime.datetime.now():%Y-%m-%d %H:%M:%S}] TEP: {fp} | THAO TAC: {kind} | "
+        f"BYTES: {start}-{end} ({end - start}) | SHA256: {hasher.hexdigest()} | LUU TAI: {target}\n"
+    )
+    with open(backup_dir / "quarantine_log.txt", "a", encoding="utf-8") as lf:
+        lf.write(log_line)
+    return target
+
+
+def repair_jpeg_header(
+    filepath: Path | str, backup_dir: Optional[Path | str] = None,
+) -> Tuple[bool, str]:
     """
     Repair JPEG file by scanning for standard SOI marker (0xFF 0xD8 0xFF).
-    Trims corrupted leading prefix (byheader error) and normalizes extension.
+    Trims corrupted leading prefix (byheader error).
+    The removed prefix is saved to `backup_dir` (default: <folder>/_Quarantine)
+    and the file is replaced atomically with its timestamps preserved.
     """
     fp = Path(filepath)
     if not fp.is_file():
@@ -46,20 +118,29 @@ def repair_jpeg_header(filepath: Path | str) -> Tuple[bool, str]:
 
     jpeg_header = b'\xff\xd8\xff'
     try:
-        with open(fp, "rb") as f:
-            content = f.read()
-
-        header_idx = content.find(jpeg_header)
+        st = fp.stat()
+        if st.st_size == 0:
+            return False, "Tep rong (0 bytes)"
+        with _map_file(fp) as content:
+            header_idx = content.find(jpeg_header)
         if header_idx == -1:
             return False, "Khong tim thay marker JPEG SOI hop le"
+        if header_idx == 0:
+            return True, "Header JPEG da hop le"
 
-        if header_idx > 0:
-            content = content[header_idx:]
-            with open(fp, "wb") as f:
-                f.write(content)
-            return True, f"Da cat bo {header_idx} bytes loi o header"
+        q_dir = Path(backup_dir) if backup_dir else _default_backup_dir(fp)
+        saved = _save_removed_bytes(fp, 0, header_idx, q_dir, "header_prefix")
 
-        return True, "Header JPEG da hop le"
+        tmp = fp.with_name(f".{fp.name}.fmpro_repair.tmp")
+        try:
+            with open(fp, "rb") as src, open(tmp, "wb") as dst:
+                src.seek(header_idx)
+                shutil.copyfileobj(src, dst, 1 << 20)
+            os.replace(tmp, fp)
+        finally:
+            tmp.unlink(missing_ok=True)
+        _restore_times(fp, st)
+        return True, f"Da cat bo {header_idx} bytes loi o header (sao luu: {saved.name})"
     except Exception as exc:
         return False, f"Loi khi xu ly: {exc}"
 
@@ -67,14 +148,17 @@ def repair_jpeg_header(filepath: Path | str) -> Tuple[bool, str]:
 def strip_trailing_data(filepath: Path | str, valid_end_pos: int) -> bool:
     """
     Truncate file in-place at valid_end_pos to remove trailing overlay.
+    Low-level primitive with no backup — use trim_file_overlay() instead.
     """
     try:
+        st = os.stat(filepath)
         with open(filepath, "r+b") as f:
             f.seek(valid_end_pos)
             f.truncate()
-        return True
     except Exception:
         return False
+    _restore_times(Path(filepath), st)
+    return True
 
 
 def inspect_file(filepath: Path | str) -> Dict[str, Any]:
@@ -195,8 +279,8 @@ def inspect_file(filepath: Path | str) -> Dict[str, Any]:
                     "threat_type": "SCRIPT_INJECTION",
                 })
                 return res
-        except Exception:
-            pass
+        except Exception as _bare_exc:
+            log_swallowed("INSPECTOR", _bare_exc, label="Bỏ qua lỗi")
 
     # Layer 4: Structural Integrity & Trailing Overlay Check
     # 4.1 JPEG
@@ -211,10 +295,11 @@ def inspect_file(filepath: Path | str) -> Dict[str, Any]:
             return res
 
         try:
-            with open(fp, "rb") as f:
-                content = f.read()
+            with _map_file(fp) as content:
+                total_len = len(content)
+                eoi_idx = content.rfind(b'\xff\xd9')
+                trailing_slice = content[eoi_idx + 2:eoi_idx + 2 + 4096] if eoi_idx != -1 else b""
 
-            eoi_idx = content.rfind(b'\xff\xd9')
             if eoi_idx == -1:
                 res.update({
                     "status": "CORRUPTED",
@@ -225,9 +310,8 @@ def inspect_file(filepath: Path | str) -> Dict[str, Any]:
                 return res
 
             valid_end = eoi_idx + 2
-            if len(content) > valid_end:
-                trailing_len = len(content) - valid_end
-                trailing_slice = content[valid_end:valid_end + 4096]
+            if total_len > valid_end:
+                trailing_len = total_len - valid_end
                 info = "Overlay rac"
                 if trailing_slice.startswith(b'PK\x03\x04'):
                     info = "Zip/Office payload an"
@@ -269,19 +353,17 @@ def inspect_file(filepath: Path | str) -> Dict[str, Any]:
             return res
 
         try:
-            with open(fp, "rb") as f:
-                content = f.read()
-
             pos = 8
             iend_end = None
-            total_len = len(content)
-            while pos + 8 <= total_len:
-                ch_len = struct.unpack(">I", content[pos:pos + 4])[0]
-                ch_type = content[pos + 4:pos + 8]
-                if ch_type == b'IEND':
-                    iend_end = pos + 12
-                    break
-                pos += 4 + 4 + ch_len + 4
+            with _map_file(fp) as content:
+                total_len = len(content)
+                while pos + 8 <= total_len:
+                    ch_len = struct.unpack(">I", content[pos:pos + 4])[0]
+                    ch_type = content[pos + 4:pos + 8]
+                    if ch_type == b'IEND':
+                        iend_end = pos + 12
+                        break
+                    pos += 4 + 4 + ch_len + 4
 
             if iend_end is None:
                 res.update({
@@ -342,11 +424,11 @@ def inspect_file(filepath: Path | str) -> Dict[str, Any]:
     elif ext == '.gif':
         if head.startswith(b'GIF87a') or head.startswith(b'GIF89a'):
             try:
-                with open(fp, "rb") as f:
-                    content = f.read()
-                trailer_idx = content.rfind(b'\x3b')
-                if trailer_idx != -1 and len(content) > trailer_idx + 1:
-                    trailing_len = len(content) - (trailer_idx + 1)
+                with _map_file(fp) as content:
+                    total_len = len(content)
+                    trailer_idx = content.rfind(b'\x3b')
+                if trailer_idx != -1 and total_len > trailer_idx + 1:
+                    trailing_len = total_len - (trailer_idx + 1)
                     res.update({
                         "status": "OVERLAY",
                         "reason": "Du lieu thua (Trailing Overlay)",
@@ -357,15 +439,21 @@ def inspect_file(filepath: Path | str) -> Dict[str, Any]:
                         "can_trim": True,
                     })
                     return res
-            except Exception:
-                pass
+            except Exception as _bare_exc:
+                log_swallowed("INSPECTOR", _bare_exc)
 
     return res
 
 
-def trim_file_overlay(filepath: Path | str, valid_end_pos: Optional[int] = None) -> Tuple[bool, int, str]:
+def trim_file_overlay(
+    filepath: Path | str,
+    valid_end_pos: Optional[int] = None,
+    backup_dir: Optional[Path | str] = None,
+) -> Tuple[bool, int, str]:
     """
     Trim trailing overlay from a file. If valid_end_pos is not provided, runs inspect_file first.
+    The removed overlay is saved to `backup_dir` (default: <folder>/_Quarantine) first;
+    if that backup fails, the file is left untouched.
     Returns (success, bytes_trimmed, message).
     """
     fp = Path(filepath)
@@ -381,9 +469,23 @@ def trim_file_overlay(filepath: Path | str, valid_end_pos: Optional[int] = None)
             return True, 0, "Tep khong co du lieu thua"
 
         bytes_to_trim = cur_size - valid_end_pos
+        q_dir = Path(backup_dir) if backup_dir else _default_backup_dir(fp)
+        try:
+            saved = _save_removed_bytes(fp, valid_end_pos, cur_size, q_dir, "overlay")
+        except Exception as exc:
+            return False, 0, f"Khong the sao luu overlay, huy got bo: {exc}"
+
         if strip_trailing_data(fp, valid_end_pos):
-            return True, bytes_to_trim, f"Da got bo {format_bytes(bytes_to_trim)}"
-        else:
-            return False, 0, "Khong the cat du lieu tep"
+            return True, bytes_to_trim, f"Da got bo {format_bytes(bytes_to_trim)} (sao luu: {saved.name})"
+
+        # Only discard the backup when the file is provably untouched
+        try:
+            untouched = fp.stat().st_size == cur_size
+        except OSError:
+            untouched = False
+        if untouched:
+            saved.unlink(missing_ok=True)
+            return False, 0, "Khong the cat du lieu tep (tep giu nguyen)"
+        return False, 0, f"Khong the cat du lieu tep — ban sao luu giu tai: {saved}"
     except Exception as exc:
         return False, 0, str(exc)
