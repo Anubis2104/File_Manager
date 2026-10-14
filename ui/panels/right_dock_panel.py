@@ -486,7 +486,8 @@ class QueueDockWidget(QWidget):
         self._progress_dlg = TaskProgressDialog("Đang đổi tên hàng đợi...", parent=self.window())
         self._progress_dlg.set_task("Đang đổi tên hàng đợi...", total=len(ops), icon="🔢")
 
-        logger = RenameLogger()
+        # Same log as QueueRenameDialog so the Restore dialog can undo dock renames too
+        logger = RenameLogger(Path("rename_log.jsonl"))
         self._worker = RenameWorker(ops=ops, logger=logger)
         self._thread = QThread(self)
         self._worker.moveToThread(self._thread)

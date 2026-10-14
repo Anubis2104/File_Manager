@@ -372,10 +372,11 @@ class InspectorPanel(QWidget):
 
         success_count = 0
         total_cut = 0
+        failures: list[str] = []
         for item in items:
             fpath = item.get("path")
             valid_end = item.get("valid_end_pos")
-            ok, cut_len, msg = trim_file_overlay(fpath, valid_end)
+            ok, cut_len, msg = trim_file_overlay(fpath, valid_end, backup_dir=self._quarantine_dir())
             if ok:
                 success_count += 1
                 total_cut += cut_len
@@ -383,6 +384,8 @@ class InspectorPanel(QWidget):
                 item["reason"] = "Đã gọt sạch Overlay"
                 item["details"] = f"Đã gọt bỏ {format_bytes(cut_len)}"
                 item["can_trim"] = False
+            else:
+                failures.append(f"{Path(fpath).name}: {msg}")
 
         # Reload table rows
         self.table.setRowCount(0)
@@ -393,8 +396,10 @@ class InspectorPanel(QWidget):
 
         QMessageBox.information(
             self, "Hoàn tất",
-            f"Đã gọt bỏ thành công {success_count} tệp tin.\nTổng dung lượng giải phóng: {format_bytes(total_cut)}",
+            f"Đã gọt bỏ thành công {success_count} tệp tin.\nTổng dung lượng giải phóng: {format_bytes(total_cut)}"
+            f"\nPhần dữ liệu đã gọt được sao lưu tại: {self._quarantine_dir()}",
         )
+        self._show_failures("Gọt overlay", failures)
 
     def _repair_selected_jpeg(self):
         selected_rows = {index.row() for index in self.table.selectedIndexes()}
@@ -403,19 +408,33 @@ class InspectorPanel(QWidget):
             return
 
         repaired = 0
+        failures: list[str] = []
         for r in selected_rows:
             fpath = self.table.item(r, 5).text()
-            ok, msg = repair_jpeg_header(fpath)
+            ok, msg = repair_jpeg_header(fpath, backup_dir=self._quarantine_dir())
             if ok:
                 repaired += 1
+            else:
+                failures.append(f"{Path(fpath).name}: {msg}")
 
         QMessageBox.information(
             self, "Hoàn tất",
             f"Đã kiểm tra và sửa cấu trúc Header cho {repaired} tệp tin.",
         )
+        self._show_failures("Sửa header JPEG", failures)
+
+    def _show_failures(self, action: str, failures: list[str]):
+        if not failures:
+            return
+        shown = "\n".join(f"• {f}" for f in failures[:10])
+        more = f"\n… và {len(failures) - 10} tệp khác" if len(failures) > 10 else ""
+        QMessageBox.warning(self, f"{action}: {len(failures)} tệp thất bại", shown + more)
+
+    def _quarantine_dir(self) -> Path:
+        return self._current_target_dir / "_Quarantine" if self._current_target_dir else Path.cwd() / "_Quarantine"
 
     def _open_quarantine_folder(self):
-        q_dir = self._current_target_dir / "_Quarantine" if self._current_target_dir else Path.cwd() / "_Quarantine"
+        q_dir = self._quarantine_dir()
         q_dir.mkdir(parents=True, exist_ok=True)
         if sys.platform == "win32":
             os.startfile(str(q_dir))

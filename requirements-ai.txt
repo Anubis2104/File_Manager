@@ -1,0 +1,8 @@
+# ===== Optional: DINOv2 AI duplicate engine =====
+# Without these packages the app still runs; duplicate detection falls back to pHash only.
+# For NVIDIA CUDA builds of torch, follow https://pytorch.org/get-started/locally/
+-r requirements.txt
+
+torch>=2.3.0
+torchvision>=0.18.0
+faiss-cpu>=1.8.0

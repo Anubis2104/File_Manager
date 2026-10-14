@@ -139,7 +139,11 @@ def test_suite():
         report("Rename Logger (JSONL)", log_file.exists() and len(logger.read_entries()) == 2)
 
         restore_res = logger.restore_from_log(verify_checksum=False)
-        report("Restore from Log", sum(1 for r in restore_res if r["success"]) == 2)
+        report("Restore from Log",
+               sum(1 for r in restore_res if r["success"]) == 2
+               and img_a.exists() and img_b.exists()
+               and not any(op.dst.exists() for op in ops),
+               f"Restored originals: {img_a.exists()}, {img_b.exists()}")
 
         # 8. Converter Test
         converter = ImageConverter()
@@ -229,9 +233,14 @@ def test_suite():
         shutil.rmtree(test_dir, ignore_errors=True)
 
     print(f"\n=== Test Summary: {passed} PASSED, {failed} FAILED ===")
-    return failed == 0
+    # pytest ignores return values — the suite must assert to be able to fail
+    assert failed == 0, f"{failed} check(s) failed, see [FAIL] lines above"
 
 
 if __name__ == "__main__":
-    success = test_suite()
-    sys.exit(0 if success else 1)
+    try:
+        test_suite()
+    except AssertionError as exc:
+        print(exc)
+        sys.exit(1)
+    sys.exit(0)

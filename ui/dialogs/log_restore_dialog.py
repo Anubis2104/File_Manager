@@ -4,6 +4,7 @@ Dialog for viewing rename log and restoring original filenames.
 """
 from __future__ import annotations
 
+from collections import Counter
 from pathlib import Path
 from typing import Optional
 
@@ -215,3 +216,13 @@ class LogRestoreDialog(QDialog):
         )
         self.btn_restore_all.setEnabled(True)
         self._load_log()   # Refresh table
+
+        if fail:
+            # Group by reason (text before the first ':' drops per-file paths)
+            reasons = Counter(r["error"].split(":", 1)[0] or "Unknown error"
+                              for r in results if not r["success"])
+            lines = "\n".join(f"• {n} tệp: {reason}" for reason, n in reasons.most_common(6))
+            QMessageBox.warning(
+                self, "Có tệp không khôi phục được",
+                f"Đã khôi phục {ok} tệp, {fail} tệp thất bại.\n\nNguyên nhân:\n{lines}",
+            )

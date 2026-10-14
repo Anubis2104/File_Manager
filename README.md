@@ -104,6 +104,10 @@ python -m venv .venv
 # 3. Cài đặt các gói phụ thuộc
 pip install -r requirements.txt
 
+# 3b. (Tùy chọn) Bật engine AI DINOv2 — PyTorch + FAISS (~2.5 GB)
+#     Không cài thì tính năng tìm trùng chỉ dùng pHash.
+pip install -r requirements-ai.txt
+
 # 4. Khởi chạy ứng dụng
 python main.py
 ```
@@ -183,6 +187,7 @@ FileManagerPro/
 ├── build_portable.bat        # Script đóng gói Portable .exe
 ├── filemanagerpro.spec       # Tệp đặc tả PyInstaller
 ├── requirements.txt          # Danh mục thư viện Python
+├── requirements-ai.txt       # (Tùy chọn) PyTorch + FAISS cho engine DINOv2
 └── README.md                 # Tài liệu hướng dẫn sử dụng
 ```
 
