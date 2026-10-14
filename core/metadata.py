@@ -10,8 +10,11 @@ from __future__ import annotations
 
 import json
 import os
+import queue
 import subprocess
+import sys
 import tempfile
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -359,6 +362,8 @@ class ExifToolDaemon:
             tags = et.read_json(path)
 
     Thread-safe: sử dụng threading.Lock cho mỗi lệnh.
+    Timeout thực sự: stdout được đọc bởi một thread riêng đẩy vào Queue, nên
+    ExifTool bị treo không thể chặn caller quá ``timeout`` giây.
     """
 
     _SENTINEL = b"{ready}"          # ExifTool in viết "{ready}" khi xong mỗi lệnh
@@ -368,13 +373,15 @@ class ExifToolDaemon:
         self.exiftool_exe = exiftool_exe
         self.timeout = timeout
         self._proc: Optional[subprocess.Popen] = None
-        self._lock: Optional[object] = None
+        # One lock for the object's lifetime: replacing it on restart would let two
+        # threads (the global daemon is shared by scanner workers) talk to the pipe at once.
+        self._lock = threading.Lock()
+        self._lines: Optional[queue.Queue] = None   # stdout lines; None item = EOF
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
 
     def start(self) -> bool:
         """Khởi động ExifTool daemon. Trả về True nếu thành công."""
-        import threading
         if self._proc and self._proc.poll() is None:
             return True  # Đã chạy
         try:
@@ -393,12 +400,28 @@ class ExifToolDaemon:
                 encoding="utf-8",
                 errors="replace",
             )
-            self._lock = threading.Lock()
+            # Fresh queue per process: lines from a killed process can never leak into the next one
+            self._lines = queue.Queue()
+            threading.Thread(
+                target=self._pump_stdout, args=(self._proc.stdout, self._lines),
+                name="ExifToolDaemon-stdout", daemon=True,
+            ).start()
             return True
         except Exception as exc:
             safe_log("w", "ExifToolDaemon", f"Khong khoi dong daemon: {exc}")
             self._proc = None
             return False
+
+    @staticmethod
+    def _pump_stdout(stream, sink: queue.Queue) -> None:
+        """Background reader: forward stdout lines to `sink`, then None at EOF."""
+        try:
+            for line in stream:
+                sink.put(line)
+        except (OSError, ValueError):
+            pass   # pipe closed underneath us by _kill()
+        finally:
+            sink.put(None)
 
     def close(self) -> None:
         """Đóng ExifTool daemon."""
@@ -410,11 +433,26 @@ class ExifToolDaemon:
             except Exception:
                 pass
             finally:
-                try:
-                    self._proc.kill()
-                except Exception:
-                    pass
-                self._proc = None
+                self._kill()
+
+    def _kill(self) -> None:
+        """Stop the process immediately (whole tree on Windows: ExifTool.exe spawns perl)."""
+        proc, self._proc = self._proc, None
+        if proc is None:
+            return
+        if sys.platform == "win32" and proc.poll() is None:
+            try:
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                    capture_output=True, timeout=5,
+                )
+            except Exception:
+                pass
+        for action in (proc.kill, proc.stdin.close, proc.stdout.close):
+            try:
+                action()
+            except Exception:
+                pass
 
     def is_running(self) -> bool:
         return self._proc is not None and self._proc.poll() is None
@@ -433,29 +471,37 @@ class ExifToolDaemon:
         Gửi lệnh tới daemon và đọc kết quả cho đến khi thấy sentinel ``{ready}``.
         Thread-safe qua Lock.
         """
-        if not self.is_running():
-            if not self.start():
-                return ""
-
         cmd_str = "\n".join(args) + "\n-execute\n"
         result_lines: list[str] = []
 
         with self._lock:
+            # Check/restart under the lock: another thread may have just killed a hung daemon
+            if not self.is_running() and not self.start():
+                return ""
             try:
                 self._proc.stdin.write(cmd_str)
                 self._proc.stdin.flush()
 
-                import select, sys as _sys
-                deadline = time.time() + self.timeout
-                while time.time() < deadline:
-                    # Windows: stdout.readline() block — OK vì ExifTool luon tra ve {ready}
-                    line = self._proc.stdout.readline()
-                    if not line:
+                deadline = time.monotonic() + self.timeout
+                while True:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise TimeoutError
+                    try:
+                        line = self._lines.get(timeout=remaining)
+                    except queue.Empty:
+                        raise TimeoutError from None
+                    if line is None:          # process exited (EOF)
                         break
                     line = line.rstrip("\r\n")
                     if line == self._SENTINEL_STR:
                         break
                     result_lines.append(line)
+            except TimeoutError:
+                # A hung process would desync every later command: drop it; next call restarts.
+                safe_log("w", "ExifToolDaemon", f"Timeout {self.timeout:.0f}s, khoi dong lai daemon: {args[-1]}")
+                self._kill()
+                return ""
             except Exception as exc:
                 safe_log("w", "ExifToolDaemon", f"Loi giao tiep daemon: {exc}")
                 self.close()
