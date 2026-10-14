@@ -210,6 +210,7 @@ class MainWindow(QMainWindow):
         self.toolbar.setObjectName("addressRow")
         self.addToolBar(self.toolbar)
         self.toolbar.navigate_requested.connect(self._navigate_to)
+        self.toolbar.refresh_requested.connect(self._refresh)
         self.toolbar.search_requested.connect(self._on_search)
 
     # ─────────────────────────────────────────────

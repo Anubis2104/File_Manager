@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import QHBoxLayout, QSizePolicy, QWidget
 
 from ui.theme import style
 
-TITLE_BAR_HEIGHT = 40
+TITLE_BAR_HEIGHT = 32   # Explorer: 40 physical px at 125%
 
 
 class TitleBar(QWidget):
@@ -28,7 +28,7 @@ class TitleBar(QWidget):
         style(self, "#titleBar { background: transparent; }")
 
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(8, 0, 0, 0)
+        lay.setContentsMargins(12, 0, 0, 0)
         lay.setSpacing(0)
 
         self.tab_strip = tab_strip

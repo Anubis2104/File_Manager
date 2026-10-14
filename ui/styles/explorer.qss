@@ -21,6 +21,7 @@ QMainWindow[backdrop="system"] {
 QToolBar#addressRow {
     background-color: @layer_on_mica;
     padding: 6px 8px;
+    border-bottom: 1px solid @stroke_control;   /* Explorer's divider above the command bar */
 }
 QSplitter::handle {
     background-color: @stroke_divider;
@@ -52,19 +53,31 @@ QToolBar::separator {
 }
 
 /* ── Address & search boxes (Explorer: flat filled boxes, accent underline on focus) ── */
-QLineEdit#addressBar, QLineEdit#searchBar {
-    background-color: @fill_control;
-    border: 1px solid @fill_control;
+QLineEdit#addressBar {
+    background-color: @control_on_mica;
+    border: 1px solid @stroke_control;
     border-radius: 4px;
-    padding: 5px 10px;
+    padding: 4px 10px;
     color: @text_primary;
     selection-background-color: @accent;
     selection-color: @text_on_accent;
 }
-QLineEdit#addressBar:focus, QLineEdit#searchBar:focus {
+QLineEdit#addressBar:focus {
     background-color: @bg_base;
-    border-color: @stroke_control;
     border-bottom: 2px solid @accent;
+}
+QLineEdit#addressBar[invalid="true"] {
+    border-color: @danger;
+    border-bottom: 2px solid @danger;
+}
+/* The search QLineEdit sits inside #searchBox, which draws the box */
+QLineEdit#searchBar {
+    background: transparent;
+    border: none;
+    padding: 4px 10px;
+    color: @text_primary;
+    selection-background-color: @accent;
+    selection-color: @text_on_accent;
 }
 
 /* ── Top-level tabs (to be replaced by title-bar tabs in phase 1) ── */

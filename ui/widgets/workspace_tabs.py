@@ -19,30 +19,10 @@ from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QLabel, QPushButton, QToolButton,
     QScrollArea, QFrame, QMenu, QApplication, QSizePolicy,
 )
-from PyQt6.QtCore import QFileInfo
-from PyQt6.QtGui import QFont
-from PyQt6.QtWidgets import QFileIconProvider
-
+from ui.shell import GLYPH_ADD, GLYPH_CLOSE, glyph_font as _glyph_font, shell_icon as _shell_icon
 from ui.theme import style
 
-TAB_HEIGHT = 34
-GLYPH_CLOSE, GLYPH_ADD = "", ""   # Segoe Fluent Icons
-
-_icon_provider: Optional[QFileIconProvider] = None
-
-
-def _shell_icon(path: Path) -> QIcon:
-    global _icon_provider
-    if _icon_provider is None:
-        _icon_provider = QFileIconProvider()
-    return _icon_provider.icon(QFileInfo(str(path)))
-
-
-def _glyph_font(px: int) -> QFont:
-    f = QFont()
-    f.setFamilies(["Segoe Fluent Icons", "Segoe MDL2 Assets"])
-    f.setPixelSize(px)
-    return f
+TAB_HEIGHT = 26         # Explorer: 32 physical px at 125%
 
 
 class TabItemData:
@@ -193,7 +173,7 @@ class WorkspaceTabBar(QWidget):
         self.btn_new_tab.setText(GLYPH_ADD)
         self.btn_new_tab.setFont(_glyph_font(11))
         self.btn_new_tab.setToolTip("Mở tab mới (Ctrl+T)")
-        self.btn_new_tab.setFixedSize(32, 30)
+        self.btn_new_tab.setFixedSize(28, 24)
         style(self.btn_new_tab,
             "QToolButton { background: transparent; border: none; border-radius: 6px; color: @text_primary; } "
             "QToolButton:hover { background: @hover_on_mica; }"
