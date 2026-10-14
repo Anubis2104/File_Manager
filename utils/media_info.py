@@ -16,6 +16,7 @@ Image.MAX_IMAGE_PIXELS = None
 warnings.simplefilter("ignore", Image.DecompressionBombWarning)
 
 from utils.file_utils import classify_extension
+from utils.safe_log import log_swallowed
 
 
 class MediaDimensions(NamedTuple):
@@ -51,11 +52,7 @@ def get_image_dimensions(path: Path) -> Optional[MediaDimensions]:
                         if orient_val in (5, 6, 7, 8):
                             w, h = h, w
             except Exception as _bare_exc:
-                try:
-                    from core.app_logcat import logcat
-                    logcat.w("MEDIA_INFO", f"Loi im lang [utils/media_info.py:53]: {_bare_exc}")
-                except Exception:
-                    pass
+                log_swallowed("MEDIA_INFO", _bare_exc)
             orientation = "H" if w >= h else "V"
             return MediaDimensions(w, h, orientation, 0.0, "image")
     except Exception:

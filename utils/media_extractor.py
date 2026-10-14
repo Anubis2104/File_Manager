@@ -50,6 +50,7 @@ except (ImportError, OSError, Exception):
     HAS_TORCH = False
 
 from utils.file_utils import IMAGE_EXTS, RAW_EXTS, VIDEO_EXTS
+from utils.safe_log import log_swallowed
 
 
 # ─────────────────────────────────────────────
@@ -173,11 +174,7 @@ class MediaExtractor:
                                 )
                                 return cls._to_tensor(resized.astype(np.float32) / 255.0)
                 except Exception as _bare_exc:
-                    try:
-                        from core.app_logcat import logcat
-                        logcat.w("MEDIA_EXTRAC", f"Loi im lang [utils/media_extractor.py:176]: {_bare_exc}")
-                    except Exception:
-                        pass
+                    log_swallowed("MEDIA_EXTRAC", _bare_exc)
 
                 # Slow path: full demosaic
                 rgb = raw.postprocess(
@@ -298,11 +295,7 @@ class MediaExtractor:
                     img = ImageOps.exif_transpose(img)
                     width, height = img.size
             except Exception as _bare_exc:
-                try:
-                    from core.app_logcat import logcat
-                    logcat.w("MEDIA_EXTRAC", f"Loi im lang [utils/media_extractor.py:297]: {_bare_exc}")
-                except Exception:
-                    pass
+                log_swallowed("MEDIA_EXTRAC", _bare_exc)
 
         # Date resolution — prefer EXIF, fall back to filesystem timestamps
         raw_date = (

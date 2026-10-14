@@ -15,6 +15,7 @@ from typing import Callable, Optional
 from utils.date_utils import extract_best_date
 from utils.file_utils import classify_extension, IMAGE_EXTS, VIDEO_EXTS
 from utils.media_info import get_media_dimensions, MediaDimensions
+from utils.safe_log import safe_log
 
 
 @dataclass
@@ -158,15 +159,7 @@ class DirectoryScanner:
                     results.append(future.result())
                 except Exception as exc:
                     # Log the error instead of silently dropping the file
-                    try:
-                        from core.app_logcat import logcat
-                        logcat.w("Scanner", f"scan_paths: lỗi xử lý {src_path.name}: {exc}")
-                    except Exception as _bare_exc:
-                        try:
-                            from core.app_logcat import logcat
-                            logcat.w("SCANNER", f"Bỏ qua lỗi [core/scanner.py:164]: {_bare_exc}")
-                        except Exception:
-                            pass
+                    safe_log("w", "Scanner", f"scan_paths: lỗi xử lý {src_path.name}: {exc}")
                     if on_error:
                         on_error(src_path, exc)
         # Preserve original path ordering

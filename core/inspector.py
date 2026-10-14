@@ -14,6 +14,7 @@ import shutil
 import struct
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple
+from utils.safe_log import log_swallowed, safe_log
 
 VALID_MEDIA_EXTS = {'.jpg', '.jpeg', '.png', '.webp', '.mp4', '.mov', '.mkv', '.avi', '.gif', '.bmp', '.tiff'}
 SYSTEM_JUNK_FILES = {'thumbs.db', 'desktop.ini', '.ds_store'}
@@ -55,11 +56,7 @@ def _restore_times(fp: Path, st: os.stat_result) -> None:
     try:
         os.utime(fp, (st.st_atime, st.st_mtime))
     except OSError as exc:
-        try:
-            from core.app_logcat import logcat
-            logcat.w("INSPECTOR", f"Khong giu duoc thoi gian goc cua {fp.name}: {exc}")
-        except Exception:
-            pass
+        safe_log("w", "INSPECTOR", f"Khong giu duoc thoi gian goc cua {fp.name}: {exc}")
 
 
 def _default_backup_dir(fp: Path) -> Path:
@@ -283,11 +280,7 @@ def inspect_file(filepath: Path | str) -> Dict[str, Any]:
                 })
                 return res
         except Exception as _bare_exc:
-            try:
-                from core.app_logcat import logcat
-                logcat.w("INSPECTOR", f"Bỏ qua lỗi [core/inspector.py:198]: {_bare_exc}")
-            except Exception:
-                pass
+            log_swallowed("INSPECTOR", _bare_exc, label="Bỏ qua lỗi")
 
     # Layer 4: Structural Integrity & Trailing Overlay Check
     # 4.1 JPEG
@@ -447,11 +440,7 @@ def inspect_file(filepath: Path | str) -> Dict[str, Any]:
                     })
                     return res
             except Exception as _bare_exc:
-                try:
-                    from core.app_logcat import logcat
-                    logcat.w("INSPECTOR", f"Loi im lang [core/inspector.py:364]: {_bare_exc}")
-                except Exception:
-                    pass
+                log_swallowed("INSPECTOR", _bare_exc)
 
     return res
 

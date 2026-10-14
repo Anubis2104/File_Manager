@@ -38,6 +38,7 @@ except ImportError:
     HAS_PIL = False
 
 from utils.cuda_helper import get_torch_device
+from utils.safe_log import safe_log
 
 HASH_SIZE = 8
 DCT_SIZE  = 32
@@ -241,15 +242,7 @@ class PHashEngine:
                     median = np.median(dct_low.flatten()[1:])
                     results[p] = (dct_low.flatten() > median)
                 except Exception as _exc:
-                    try:
-                        from core.app_logcat import logcat
-                        logcat.w("pHash", f"Bỏ qua {p.name} (CPU DCT lỗi): {_exc}")
-                    except Exception as _bare_exc:
-                        try:
-                            from core.app_logcat import logcat
-                            logcat.w("PHASH_ENGINE", f"Loi im lang [duplicate/phash_engine.py:247]: {_bare_exc}")
-                        except Exception:
-                            pass
+                    safe_log("w", "pHash", f"Bỏ qua {p.name} (CPU DCT lỗi): {_exc}")
 
             if cancel_check and cancel_check():
                 break

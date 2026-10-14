@@ -21,6 +21,7 @@ from utils.date_utils import (
     extract_best_date, parse_exif_date, format_date_for_rename,
     resolve_exiftool_exe, _test_exiftool_binary, run_exiftool_utf8
 )
+from utils.safe_log import log_swallowed, safe_log
 
 
 FFMPEG_CONTAINER_EXTS: frozenset[str] = frozenset({
@@ -104,22 +105,14 @@ def strip_video_metadata_with_ffmpeg(filepath: Path | str, ffmpeg_exe: Optional[
             try:
                 os.utime(fp, (orig_atime, orig_mtime))
             except Exception as _bare_exc:
-                try:
-                    from core.app_logcat import logcat
-                    logcat.w("METADATA", f"Loi im lang [core/metadata.py:106]: {_bare_exc}")
-                except Exception:
-                    pass
+                log_swallowed("METADATA", _bare_exc)
             return True, ""
         else:
             if temp_out.exists():
                 try:
                     temp_out.unlink()
                 except Exception as _bare_exc:
-                    try:
-                        from core.app_logcat import logcat
-                        logcat.w("METADATA", f"Loi im lang [core/metadata.py:113]: {_bare_exc}")
-                    except Exception:
-                        pass
+                    log_swallowed("METADATA", _bare_exc)
             err = res.stderr.strip() or "Lỗi FFmpeg không xác định"
             return False, err
     except Exception as exc:
@@ -127,11 +120,7 @@ def strip_video_metadata_with_ffmpeg(filepath: Path | str, ffmpeg_exe: Optional[
             try:
                 temp_out.unlink()
             except Exception as _bare_exc:
-                try:
-                    from core.app_logcat import logcat
-                    logcat.w("METADATA", f"Loi im lang [core/metadata.py:121]: {_bare_exc}")
-                except Exception:
-                    pass
+                log_swallowed("METADATA", _bare_exc)
         return False, str(exc)
 
 
@@ -204,22 +193,14 @@ def write_video_metadata_with_ffmpeg(
             try:
                 os.utime(fp, (orig_atime, orig_mtime))
             except Exception as _bare_exc:
-                try:
-                    from core.app_logcat import logcat
-                    logcat.w("METADATA", f"Loi im lang [core/metadata.py:194]: {_bare_exc}")
-                except Exception:
-                    pass
+                log_swallowed("METADATA", _bare_exc)
             return True, ""
         else:
             if temp_out.exists():
                 try:
                     temp_out.unlink()
                 except Exception as _bare_exc:
-                    try:
-                        from core.app_logcat import logcat
-                        logcat.w("METADATA", f"Loi im lang [core/metadata.py:201]: {_bare_exc}")
-                    except Exception:
-                        pass
+                    log_swallowed("METADATA", _bare_exc)
             err = res.stderr.strip() or "Lỗi FFmpeg không xác định"
             return False, err
     except Exception as exc:
@@ -227,11 +208,7 @@ def write_video_metadata_with_ffmpeg(
             try:
                 temp_out.unlink()
             except Exception as _bare_exc:
-                try:
-                    from core.app_logcat import logcat
-                    logcat.w("METADATA", f"Loi im lang [core/metadata.py:209]: {_bare_exc}")
-                except Exception:
-                    pass
+                log_swallowed("METADATA", _bare_exc)
         return False, str(exc)
 
 
@@ -419,11 +396,7 @@ class ExifToolDaemon:
             self._lock = threading.Lock()
             return True
         except Exception as exc:
-            try:
-                from core.app_logcat import logcat
-                logcat.w("ExifToolDaemon", f"Khong khoi dong daemon: {exc}")
-            except Exception:
-                pass
+            safe_log("w", "ExifToolDaemon", f"Khong khoi dong daemon: {exc}")
             self._proc = None
             return False
 
@@ -484,11 +457,7 @@ class ExifToolDaemon:
                         break
                     result_lines.append(line)
             except Exception as exc:
-                try:
-                    from core.app_logcat import logcat
-                    logcat.w("ExifToolDaemon", f"Loi giao tiep daemon: {exc}")
-                except Exception:
-                    pass
+                safe_log("w", "ExifToolDaemon", f"Loi giao tiep daemon: {exc}")
                 self.close()
                 return ""
 
@@ -509,18 +478,10 @@ class ExifToolDaemon:
         try:
             data = json.loads(raw)
             if data and isinstance(data, list):
-                try:
-                    from core.app_logcat import logcat
-                    logcat.d("ExifToolDaemon", f"{path.name}: {len(data[0])} tags ({dur_ms:.0f}ms daemon)")
-                except Exception:
-                    pass
+                safe_log("d", "ExifToolDaemon", f"{path.name}: {len(data[0])} tags ({dur_ms:.0f}ms daemon)")
                 return data[0]
         except Exception as exc:
-            try:
-                from core.app_logcat import logcat
-                logcat.w("ExifToolDaemon", f"JSON parse error for {path.name}: {exc}")
-            except Exception:
-                pass
+            safe_log("w", "ExifToolDaemon", f"JSON parse error for {path.name}: {exc}")
         return {}
 
 
@@ -593,11 +554,7 @@ class MetadataEngine:
             data["File:FileSize"] = f"{stat.st_size / 1024:.1f} KB" if stat.st_size < 1048576 else f"{stat.st_size / 1048576:.2f} MB"
             data["File:FileModifyDate"] = datetime.fromtimestamp(stat.st_mtime).strftime("%Y:%m:%d %H:%M:%S")
         except Exception as _bare_exc:
-            try:
-                from core.app_logcat import logcat
-                logcat.w("METADATA", f"Loi im lang [core/metadata.py:389]: {_bare_exc}")
-            except Exception:
-                pass
+            log_swallowed("METADATA", _bare_exc)
 
         # Try Pillow for images
         try:
@@ -619,17 +576,9 @@ class MetadataEngine:
                                 sub_name = ExifTags.TAGS.get(sub_id, str(sub_id))
                                 data[f"EXIF:{sub_name}"] = str(sub_val)
                         except Exception as _bare_exc:
-                            try:
-                                from core.app_logcat import logcat
-                                logcat.w("METADATA", f"Loi im lang [core/metadata.py:411]: {_bare_exc}")
-                            except Exception:
-                                pass
+                            log_swallowed("METADATA", _bare_exc)
         except Exception as _bare_exc:
-            try:
-                from core.app_logcat import logcat
-                logcat.w("METADATA", f"Loi im lang [core/metadata.py:417]: {_bare_exc}")
-            except Exception:
-                pass
+            log_swallowed("METADATA", _bare_exc)
 
         # Try mutagen for audio/video
         if not any(k.startswith("EXIF:") for k in data):
@@ -646,11 +595,7 @@ class MetadataEngine:
                     for k, v in mf.tags.items():
                         data[f"Tag:{k}"] = str(v)
             except Exception as _bare_exc:
-                try:
-                    from core.app_logcat import logcat
-                    logcat.w("METADATA", f"Loi im lang [core/metadata.py:434]: {_bare_exc}")
-                except Exception:
-                    pass
+                log_swallowed("METADATA", _bare_exc)
 
         return data
 
@@ -758,11 +703,7 @@ class MetadataEngine:
                 ts = dt.timestamp()
                 os.utime(path, (ts, ts))
             except Exception as _bare_exc:
-                try:
-                    from core.app_logcat import logcat
-                    logcat.w("METADATA", f"Loi im lang [core/metadata.py:529]: {_bare_exc}")
-                except Exception:
-                    pass
+                log_swallowed("METADATA", _bare_exc)
             return False, "ExifTool not found."
 
         from utils.file_utils import classify_extension
@@ -800,11 +741,7 @@ class MetadataEngine:
                 ts = dt.timestamp()
                 os.utime(path, (ts, ts))
             except Exception as _bare_exc:
-                try:
-                    from core.app_logcat import logcat
-                    logcat.w("METADATA", f"Loi im lang [core/metadata.py:567]: {_bare_exc}")
-                except Exception:
-                    pass
+                log_swallowed("METADATA", _bare_exc)
 
             if r.returncode == 0:
                 return True, ""
@@ -930,11 +867,7 @@ class ArgfileMetadataEngine:
                 try:
                     os.remove(tmp_path)
                 except Exception as _bare_exc:
-                    try:
-                        from core.app_logcat import logcat
-                        logcat.w("METADATA", f"Loi im lang [core/metadata.py:693]: {_bare_exc}")
-                    except Exception:
-                        pass
+                    log_swallowed("METADATA", _bare_exc)
 
     # ─────────────────────────────────────────────
     # Public: batch metadata scan
@@ -975,11 +908,7 @@ class ArgfileMetadataEngine:
                 try:
                     all_meta.extend(json.loads(stdout))
                 except Exception as _bare_exc:
-                    try:
-                        from core.app_logcat import logcat
-                        logcat.w("METADATA", f"Loi im lang [core/metadata.py:734]: {_bare_exc}")
-                    except Exception:
-                        pass
+                    log_swallowed("METADATA", _bare_exc)
 
         return all_meta
 

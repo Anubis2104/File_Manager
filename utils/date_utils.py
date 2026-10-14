@@ -13,6 +13,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+from utils.safe_log import log_swallowed, safe_log
 
 
 # EXIF date string format: "2024:08:19 10:30:00"
@@ -132,11 +133,7 @@ def run_exiftool_utf8(
             try:
                 os.remove(tmp_name)
             except Exception as _bare_exc:
-                try:
-                    from core.app_logcat import logcat
-                    logcat.w("DATE_UTILS", f"Khong xoa temp argfile: {_bare_exc}")
-                except Exception:
-                    pass
+                safe_log("w", "DATE_UTILS", f"Khong xoa temp argfile: {_bare_exc}")
 
 
 def get_date_from_exiftool(path: Path, exiftool_exe: str = "exiftool") -> Optional[datetime]:
@@ -204,11 +201,7 @@ def get_date_from_pillow(path: Path) -> Optional[datetime]:
                     if dt and dt.year > 1970:
                         return dt
     except Exception as _bare_exc:
-        try:
-            from core.app_logcat import logcat
-            logcat.w("DATE_UTILS", f"Loi im lang [utils/date_utils.py:206]: {_bare_exc}")
-        except Exception:
-            pass
+        log_swallowed("DATE_UTILS", _bare_exc)
     return None
 
 
@@ -225,17 +218,9 @@ def get_date_from_mutagen(path: Path) -> Optional[datetime]:
                     try:
                         return datetime.fromisoformat(val_clean)
                     except Exception as _bare_exc:
-                        try:
-                            from core.app_logcat import logcat
-                            logcat.w("DATE_UTILS", f"Loi im lang [utils/date_utils.py:223]: {_bare_exc}")
-                        except Exception:
-                            pass
+                        log_swallowed("DATE_UTILS", _bare_exc)
     except Exception as _bare_exc:
-        try:
-            from core.app_logcat import logcat
-            logcat.w("DATE_UTILS", f"Loi im lang [utils/date_utils.py:225]: {_bare_exc}")
-        except Exception:
-            pass
+        log_swallowed("DATE_UTILS", _bare_exc)
     return None
 
 
@@ -297,11 +282,7 @@ def extract_best_date(
         if mtime and mtime.year > 1970:
             return mtime, "mtime"
     except Exception as _bare_exc:
-        try:
-            from core.app_logcat import logcat
-            logcat.w("DATE_UTILS", f"Loi im lang [utils/date_utils.py:287]: {_bare_exc}")
-        except Exception:
-            pass
+        log_swallowed("DATE_UTILS", _bare_exc)
 
     return None, "unknown"
 
