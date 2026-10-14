@@ -25,6 +25,7 @@ from core.metadata import MetadataEngine
 from core.workers  import MetadataStripWorker
 from utils.file_utils import classify_extension, IMAGE_EXTS, VIDEO_EXTS
 from ui.widgets.progress_dialog import TaskProgressDialog
+from ui.theme import qcolor, style
 
 
 class MetadataViewerDialog(QDialog):
@@ -44,7 +45,7 @@ class MetadataViewerDialog(QDialog):
         layout.setSpacing(8)
 
         self.lbl_path = QLabel(f"<b>File:</b> {self.path}")
-        self.lbl_path.setStyleSheet("color: #0a84ff; font-size: 11px;")
+        style(self.lbl_path, "color: @accent; font-size: 11px;")
         layout.addWidget(self.lbl_path)
 
         self.table = QTableWidget()
@@ -74,8 +75,8 @@ class MetadataViewerDialog(QDialog):
             k_item = QTableWidgetItem(str(k))
             v_item = QTableWidgetItem(str(v))
             if "date" in k.lower() or "time" in k.lower():
-                k_item.setForeground(QColor("#30d158"))
-                v_item.setForeground(QColor("#30d158"))
+                k_item.setForeground(qcolor("success"))
+                v_item.setForeground(qcolor("success"))
             self.table.setItem(row, 0, k_item)
             self.table.setItem(row, 1, v_item)
 
@@ -166,7 +167,7 @@ class MetadataDialog(QDialog):
 
         # ── Table ──
         self.lbl_summary = QLabel("Danh sách file sẽ xử lý:")
-        self.lbl_summary.setStyleSheet("color: #8e8e93; font-size: 11px; font-weight: 600;")
+        style(self.lbl_summary, "color: @text_secondary; font-size: 11px; font-weight: 600;")
         layout.addWidget(self.lbl_summary)
 
         self.table = QTableWidget()
@@ -188,7 +189,7 @@ class MetadataDialog(QDialog):
         layout.addWidget(self.table)
 
         self.lbl_status = QLabel("")
-        self.lbl_status.setStyleSheet("color: #8e8e93; font-size: 11px;")
+        style(self.lbl_status, "color: @text_secondary; font-size: 11px;")
         layout.addWidget(self.lbl_status)
 
         # ── Buttons ──
@@ -353,12 +354,12 @@ class MetadataDialog(QDialog):
                 if res["success"]:
                     ok_count += 1
                     status_item.setText("✔ Đã xóa & bảo toàn")
-                    status_item.setForeground(QColor("#30d158"))
+                    status_item.setForeground(qcolor("success"))
                     status_item.setToolTip("Metadata đã được xóa sạch và ngày tạo được bảo toàn thành công.")
                 else:
                     err_msg = res.get("error", "Lỗi không xác định")
                     status_item.setText(f"❌ {err_msg[:35]}")
-                    status_item.setForeground(QColor("#ff453a"))
+                    status_item.setForeground(qcolor("danger"))
                     status_item.setToolTip(err_msg)
         finally:
             self.table.blockSignals(False)

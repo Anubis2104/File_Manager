@@ -28,6 +28,7 @@ from PyQt6.QtWidgets import (
 
 from ui.widgets.svg_icons import get_svg_icon, get_svg_pixmap
 from ui.panels.media_card_delegate import MediaCardDelegate
+from ui.theme import style, tok
 
 
 class EmptyDropzoneWidget(QWidget):
@@ -51,15 +52,15 @@ class EmptyDropzoneWidget(QWidget):
         # Dashed container box
         self.box = QFrame()
         self.box.setObjectName("dropzoneBox")
-        self.box.setStyleSheet(
+        style(self.box, 
             "#dropzoneBox { "
-            "   border: 2px dashed #334155; "
+            "   border: 2px dashed @stroke_control; "
             "   border-radius: 12px; "
             "   background-color: rgba(17, 24, 39, 0.4); "
             "   padding: 40px; "
             "} "
             "#dropzoneBox[dragActive=\"true\"] { "
-            "   border-color: #38bdf8; "
+            "   border-color: @accent; "
             "   background-color: rgba(56, 189, 248, 0.08); "
             "}"
         )
@@ -73,20 +74,20 @@ class EmptyDropzoneWidget(QWidget):
         # Large icon
         self.lbl_icon = QLabel()
         self.lbl_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_icon.setPixmap(get_svg_pixmap("upload_cloud", "#38bdf8", 56))
+        self.lbl_icon.setPixmap(get_svg_pixmap("upload_cloud", tok("accent"), 56))
         box_lay.addWidget(self.lbl_icon)
 
         # Title
         lbl_title = QLabel("Thư mục này đang trống")
         lbl_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl_title.setStyleSheet("color: #f8fafc; font-size: 12pt; font-weight: 600;")
+        style(lbl_title, "color: @text_primary; font-size: 12pt; font-weight: 600;")
         box_lay.addWidget(lbl_title)
 
         # Subtitle
         lbl_sub = QLabel("Kéo thả tệp tin từ ngoài vào đây hoặc sử dụng các thao tác nhanh bên dưới")
         lbl_sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl_sub.setWordWrap(True)
-        lbl_sub.setStyleSheet("color: #94a3b8; font-size: 9pt;")
+        style(lbl_sub, "color: @text_secondary; font-size: 9pt;")
         box_lay.addWidget(lbl_sub)
 
         box_lay.addSpacing(6)
@@ -97,34 +98,34 @@ class EmptyDropzoneWidget(QWidget):
         actions_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         btn_new = QPushButton(" Tạo thư mục mới")
-        btn_new.setIcon(get_svg_icon("folder_plus", "#38bdf8", 16))
+        btn_new.setIcon(get_svg_icon("folder_plus", tok("accent"), 16))
         btn_new.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_new.setStyleSheet(
-            "QPushButton { background: #1e293b; color: #38bdf8; border: 1px solid #334155; "
+        style(btn_new, 
+            "QPushButton { background: @fill_hover; color: @accent; border: 1px solid @stroke_control; "
             "border-radius: 6px; padding: 6px 14px; font-size: 8.5pt; font-weight: 500; } "
-            "QPushButton:hover { background: #334155; border-color: #38bdf8; }"
+            "QPushButton:hover { background: @fill_selected; border-color: @accent; }"
         )
         btn_new.clicked.connect(self.create_folder_clicked.emit)
         actions_row.addWidget(btn_new)
 
         btn_browse = QPushButton(" Mở thư mục khác")
-        btn_browse.setIcon(get_svg_icon("folder_open", "#cbd5e1", 16))
+        btn_browse.setIcon(get_svg_icon("folder_open", tok("text_secondary"), 16))
         btn_browse.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_browse.setStyleSheet(
-            "QPushButton { background: #1e293b; color: #cbd5e1; border: 1px solid #334155; "
+        style(btn_browse, 
+            "QPushButton { background: @fill_hover; color: @text_secondary; border: 1px solid @stroke_control; "
             "border-radius: 6px; padding: 6px 14px; font-size: 8.5pt; font-weight: 500; } "
-            "QPushButton:hover { background: #334155; }"
+            "QPushButton:hover { background: @fill_selected; }"
         )
         btn_browse.clicked.connect(self.browse_clicked.emit)
         actions_row.addWidget(btn_browse)
 
         btn_up = QPushButton(" Lên thư mục cha")
-        btn_up.setIcon(get_svg_icon("arrow_up", "#cbd5e1", 16))
+        btn_up.setIcon(get_svg_icon("arrow_up", tok("text_secondary"), 16))
         btn_up.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_up.setStyleSheet(
-            "QPushButton { background: #1e293b; color: #cbd5e1; border: 1px solid #334155; "
+        style(btn_up, 
+            "QPushButton { background: @fill_hover; color: @text_secondary; border: 1px solid @stroke_control; "
             "border-radius: 6px; padding: 6px 14px; font-size: 8.5pt; font-weight: 500; } "
-            "QPushButton:hover { background: #334155; }"
+            "QPushButton:hover { background: @fill_selected; }"
         )
         btn_up.clicked.connect(self.go_up_clicked.emit)
         actions_row.addWidget(btn_up)
@@ -171,13 +172,13 @@ class ContentPanel(QWidget):
         bar.setContentsMargins(10, 5, 10, 5)
 
         self.lbl_count = QLabel("0 mục")
-        self.lbl_count.setStyleSheet("color: #94a3b8; font-size: 8.5pt; font-weight: 500;")
+        style(self.lbl_count, "color: @text_secondary; font-size: 8.5pt; font-weight: 500;")
         bar.addWidget(self.lbl_count)
         bar.addStretch()
 
         # Vector SVG toggle buttons
         btn_grid = QToolButton()
-        btn_grid.setIcon(get_svg_icon("grid", "#94a3b8", 16, "#38bdf8"))
+        btn_grid.setIcon(get_svg_icon("grid", tok("text_secondary"), 16, tok("accent")))
         btn_grid.setToolTip("Chế độ Lưới (Card View)")
         btn_grid.setCheckable(True)
         btn_grid.setChecked(True)
@@ -185,25 +186,25 @@ class ContentPanel(QWidget):
         btn_grid.clicked.connect(lambda: self._set_view("grid"))
 
         btn_list = QToolButton()
-        btn_list.setIcon(get_svg_icon("list", "#94a3b8", 16, "#38bdf8"))
+        btn_list.setIcon(get_svg_icon("list", tok("text_secondary"), 16, tok("accent")))
         btn_list.setToolTip("Chế độ Chi tiết (Detail View)")
         btn_list.setCheckable(True)
         btn_list.setObjectName("viewToggle")
         btn_list.clicked.connect(lambda: self._set_view("detail"))
 
         for btn in (btn_grid, btn_list):
-            btn.setStyleSheet(
+            style(btn, 
                 "QToolButton { background: transparent; border: 1px solid transparent; border-radius: 5px; "
                 "padding: 4px 8px; } "
-                "QToolButton:checked { background: #1e293b; border-color: #38bdf8; } "
-                "QToolButton:hover { background: #1e293b; }"
+                "QToolButton:checked { background: @fill_hover; border-color: @accent; } "
+                "QToolButton:hover { background: @fill_hover; }"
             )
             bar.addWidget(btn)
         self._view_btns = (btn_grid, btn_list)
 
         bar_widget = QWidget()
         bar_widget.setLayout(bar)
-        bar_widget.setStyleSheet("background: #0e1526; border-bottom: 1px solid #1e293b;")
+        style(bar_widget, "background: @bg_layer; border-bottom: 1px solid @stroke_divider;")
         layout.addWidget(bar_widget)
 
         # ── Stacked views ──

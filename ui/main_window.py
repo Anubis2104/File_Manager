@@ -35,6 +35,7 @@ from ui.widgets.command_palette import CommandPaletteDialog, PaletteCommand
 from ui.widgets.svg_icons       import get_svg_icon
 from core.background_manager    import load_appearance_settings, apply_acrylic_blur
 from utils.cuda_helper          import get_cuda_info
+from ui.theme import tok
 
 
 class MainWindow(QMainWindow):
@@ -94,9 +95,11 @@ class MainWindow(QMainWindow):
     # ─────────────────────────────────────────────
 
     def _apply_stylesheet(self):
-        qss_path = Path(__file__).parent / "styles" / "dark_theme.qss"
-        if qss_path.exists():
-            self.setStyleSheet(qss_path.read_text(encoding="utf-8"))
+        # The app-wide Explorer stylesheet is owned by ui.theme; install it when the
+        # window is created without main.py (tests, embedding).
+        from ui.theme import theme
+        if theme()._app is None:
+            theme().install(QApplication.instance())
 
     # ─────────────────────────────────────────────
     # Menu actions (wired to toolbar + context menu)
@@ -109,13 +112,13 @@ class MainWindow(QMainWindow):
         tb.setIconSize(QSize(16, 16))
 
         # Rename action
-        self.act_rename = tb.addAction(get_svg_icon("rename", "#38bdf8", 16), "Đổi tên hàng loạt")
+        self.act_rename = tb.addAction(get_svg_icon("rename", tok("accent"), 16), "Đổi tên hàng loạt")
         self.act_rename.setToolTip("Đổi tên file theo cú pháp chuẩn (Ctrl+R)")
         self.act_rename.triggered.connect(self._open_rename_dialog)
         self.act_rename.setEnabled(True)
 
         # Queue Rename action (Drag-and-drop sequential)
-        self.act_queue_rename = tb.addAction(get_svg_icon("queue", "#38bdf8", 16), "Đổi tên Hàng đợi (Kéo thả)")
+        self.act_queue_rename = tb.addAction(get_svg_icon("queue", tok("accent"), 16), "Đổi tên Hàng đợi (Kéo thả)")
         self.act_queue_rename.setToolTip("Sắp xếp thứ tự kéo thả thủ công kèm đánh số thứ tự [STT]_[Tên cũ]")
         self.act_queue_rename.triggered.connect(lambda: self._open_queue_rename_dialog())
         self.act_queue_rename.setEnabled(True)
@@ -123,14 +126,14 @@ class MainWindow(QMainWindow):
         tb.addSeparator()
 
         # Convert action
-        self.act_convert = tb.addAction(get_svg_icon("convert", "#38bdf8", 16), "Chuyển đổi định dạng")
+        self.act_convert = tb.addAction(get_svg_icon("convert", tok("accent"), 16), "Chuyển đổi định dạng")
         self.act_convert.setToolTip("Chuyển đổi ảnh/video sang định dạng khác")
         self.act_convert.triggered.connect(self._open_convert_dialog)
 
         tb.addSeparator()
 
         # Strip metadata
-        self.act_strip_meta = tb.addAction(get_svg_icon("shield", "#38bdf8", 16), "Xóa Metadata")
+        self.act_strip_meta = tb.addAction(get_svg_icon("shield", tok("accent"), 16), "Xóa Metadata")
         self.act_strip_meta.setToolTip("Xóa metadata, bảo toàn ngày tháng tạo gốc")
         self.act_strip_meta.triggered.connect(self._strip_metadata)
         self.act_strip_meta.setEnabled(True)
@@ -138,49 +141,49 @@ class MainWindow(QMainWindow):
         tb.addSeparator()
 
         # Clean empty folders
-        self.act_clean = tb.addAction(get_svg_icon("trash", "#38bdf8", 16), "Xóa thư mục rỗng")
+        self.act_clean = tb.addAction(get_svg_icon("trash", tok("accent"), 16), "Xóa thư mục rỗng")
         self.act_clean.setToolTip("Tìm và đưa thư mục rỗng vào thùng rác")
         self.act_clean.triggered.connect(self._clean_empty_folders)
 
         tb.addSeparator()
 
         # Inspector action
-        self.act_inspector = tb.addAction(get_svg_icon("inspector", "#38bdf8", 16), "Kiểm định Byte")
+        self.act_inspector = tb.addAction(get_svg_icon("inspector", tok("accent"), 16), "Kiểm định Byte")
         self.act_inspector.setToolTip("Kiểm định cấu trúc, gọt overlay và quét mã độc")
         self.act_inspector.triggered.connect(lambda: self.tab_widget.setCurrentIndex(2))
 
         tb.addSeparator()
 
         # Restore from log
-        self.act_restore = tb.addAction(get_svg_icon("refresh", "#38bdf8", 16), "Khôi phục từ Log")
+        self.act_restore = tb.addAction(get_svg_icon("refresh", tok("accent"), 16), "Khôi phục từ Log")
         self.act_restore.setToolTip("Khôi phục tên gốc từ file log")
         self.act_restore.triggered.connect(self._open_restore_dialog)
 
         tb.addSeparator()
 
         # Auto Organize action
-        self.act_organize = tb.addAction(get_svg_icon("folder_plus", "#38bdf8", 16), "Tự động sắp xếp")
+        self.act_organize = tb.addAction(get_svg_icon("folder_plus", tok("accent"), 16), "Tự động sắp xếp")
         self.act_organize.setToolTip("Gom nhóm file vào thư mục con theo ngày hoặc loại")
         self.act_organize.triggered.connect(self._open_organize_dialog)
 
         tb.addSeparator()
 
         # Stats action
-        self.act_stats = tb.addAction(get_svg_icon("stats", "#38bdf8", 16), "Thống kê")
+        self.act_stats = tb.addAction(get_svg_icon("stats", tok("accent"), 16), "Thống kê")
         self.act_stats.setToolTip("Phân tích dung lượng và phân bổ file")
         self.act_stats.triggered.connect(self._open_stats_dialog)
 
         tb.addSeparator()
 
         # Settings action
-        self.act_settings = tb.addAction(get_svg_icon("settings", "#38bdf8", 16), "Cài đặt")
+        self.act_settings = tb.addAction(get_svg_icon("settings", tok("accent"), 16), "Cài đặt")
         self.act_settings.setToolTip("Cấu hình hệ thống & AI")
         self.act_settings.triggered.connect(self._open_settings_dialog)
 
         tb.addSeparator()
 
         # Logcat action
-        self.act_logcat = tb.addAction(get_svg_icon("logcat", "#38bdf8", 16), "Logcat (F12)")
+        self.act_logcat = tb.addAction(get_svg_icon("logcat", tok("accent"), 16), "Logcat (F12)")
         self.act_logcat.setToolTip("Mở bảng điều khiển theo dõi Logcat trực tiếp (F12)")
         self.act_logcat.triggered.connect(self._open_logcat_dialog)
 
@@ -406,35 +409,35 @@ class MainWindow(QMainWindow):
         logcat.i("UI:TreeContextMenu", f"Menu chuột phải cây thư mục: {folder_path}")
         menu = QMenu(self)
 
-        act_rename = menu.addAction(get_svg_icon("rename", "#38bdf8", 16), "Đổi tên hàng loạt tệp trong thư mục này... (Ctrl+R)")
+        act_rename = menu.addAction(get_svg_icon("rename", tok("accent"), 16), "Đổi tên hàng loạt tệp trong thư mục này... (Ctrl+R)")
         act_rename.triggered.connect(lambda: self._open_rename_dialog(target_folders=[folder_path]))
 
-        act_queue = menu.addAction(get_svg_icon("queue", "#38bdf8", 16), "Đổi tên theo hàng đợi kéo thả (Kèm STT)...")
+        act_queue = menu.addAction(get_svg_icon("queue", tok("accent"), 16), "Đổi tên theo hàng đợi kéo thả (Kèm STT)...")
         act_queue.triggered.connect(lambda: self._open_queue_rename_dialog(target_folder=folder_path))
 
-        act_open = menu.addAction(get_svg_icon("folder_open", "#cbd5e1", 16), "Mở thư mục này")
+        act_open = menu.addAction(get_svg_icon("folder_open", tok("text_secondary"), 16), "Mở thư mục này")
         act_open.triggered.connect(lambda: self._navigate_to(folder_path))
 
         menu.addSeparator()
 
-        act_dup = menu.addAction(get_svg_icon("duplicate", "#38bdf8", 16), "Quét tìm trùng lặp cây thư mục này...")
+        act_dup = menu.addAction(get_svg_icon("duplicate", tok("accent"), 16), "Quét tìm trùng lặp cây thư mục này...")
         act_dup.triggered.connect(lambda: (self._navigate_to(folder_path), self.tab_widget.setCurrentIndex(1), self._start_dup_scan()))
 
-        act_meta = menu.addAction(get_svg_icon("shield", "#38bdf8", 16), "Xóa Metadata các tệp trong thư mục...")
+        act_meta = menu.addAction(get_svg_icon("shield", tok("accent"), 16), "Xóa Metadata các tệp trong thư mục...")
         act_meta.triggered.connect(lambda: self._strip_metadata(target_folder=folder_path))
 
-        act_convert = menu.addAction(get_svg_icon("convert", "#38bdf8", 16), "Chuyển đổi định dạng ảnh/video...")
+        act_convert = menu.addAction(get_svg_icon("convert", tok("accent"), 16), "Chuyển đổi định dạng ảnh/video...")
         act_convert.triggered.connect(lambda: self._open_convert_dialog(target_folder=folder_path))
 
-        act_org = menu.addAction(get_svg_icon("folder_plus", "#38bdf8", 16), "Tự động sắp xếp tệp trong thư mục...")
+        act_org = menu.addAction(get_svg_icon("folder_plus", tok("accent"), 16), "Tự động sắp xếp tệp trong thư mục...")
         act_org.triggered.connect(lambda: self._open_organize_dialog(target_folder=folder_path))
 
-        act_stats = menu.addAction(get_svg_icon("stats", "#38bdf8", 16), "Thống kê chi tiết thư mục này...")
+        act_stats = menu.addAction(get_svg_icon("stats", tok("accent"), 16), "Thống kê chi tiết thư mục này...")
         act_stats.triggered.connect(lambda: self._open_stats_dialog(target_folder=folder_path))
 
         menu.addSeparator()
 
-        act_copy = menu.addAction(get_svg_icon("copy", "#cbd5e1", 16), "Sao chép đường dẫn")
+        act_copy = menu.addAction(get_svg_icon("copy", tok("text_secondary"), 16), "Sao chép đường dẫn")
         act_copy.triggered.connect(lambda: QApplication.clipboard().setText(str(folder_path)))
 
         menu.exec(global_pos)
@@ -448,41 +451,41 @@ class MainWindow(QMainWindow):
         selected_files = [p for p in selected_paths if p.is_file()]
 
         if selected_files:
-            act_peek = menu.addAction(get_svg_icon("eye", "#38bdf8", 16), "Xem trước nhanh (Space)")
+            act_peek = menu.addAction(get_svg_icon("eye", tok("accent"), 16), "Xem trước nhanh (Space)")
             act_peek.triggered.connect(lambda: self._open_quick_look(selected_files[0]))
             menu.addSeparator()
 
         if selected_folders:
             folder_text = selected_folders[0].name if len(selected_folders) == 1 else f"{len(selected_folders)} thư mục"
-            act_rename = menu.addAction(get_svg_icon("rename", "#38bdf8", 16), f"Đổi tên hàng loạt tệp trong {folder_text}... (Ctrl+R)")
+            act_rename = menu.addAction(get_svg_icon("rename", tok("accent"), 16), f"Đổi tên hàng loạt tệp trong {folder_text}... (Ctrl+R)")
             act_rename.triggered.connect(lambda: self._open_rename_dialog(target_folders=selected_folders))
 
-            act_queue = menu.addAction(get_svg_icon("queue", "#38bdf8", 16), f"Đổi tên hàng đợi kéo thả trong {folder_text}...")
+            act_queue = menu.addAction(get_svg_icon("queue", tok("accent"), 16), f"Đổi tên hàng đợi kéo thả trong {folder_text}...")
             act_queue.triggered.connect(lambda: self._open_queue_rename_dialog(target_folder=selected_folders[0]))
         elif selected_files:
-            act_rename = menu.addAction(get_svg_icon("rename", "#38bdf8", 16), f"Đổi tên hàng loạt ({len(selected_files)} tệp đã chọn) (Ctrl+R)")
+            act_rename = menu.addAction(get_svg_icon("rename", tok("accent"), 16), f"Đổi tên hàng loạt ({len(selected_files)} tệp đã chọn) (Ctrl+R)")
             act_rename.triggered.connect(lambda: self._open_rename_dialog(target_files=selected_files))
         else:
-            act_rename = menu.addAction(get_svg_icon("rename", "#38bdf8", 16), "Đổi tên toàn bộ tệp trong thư mục hiện tại (Ctrl+R)")
+            act_rename = menu.addAction(get_svg_icon("rename", tok("accent"), 16), "Đổi tên toàn bộ tệp trong thư mục hiện tại (Ctrl+R)")
             act_rename.triggered.connect(self._open_rename_dialog)
 
-            act_queue = menu.addAction(get_svg_icon("queue", "#38bdf8", 16), "Đổi tên hàng đợi kéo thả thư mục hiện tại...")
+            act_queue = menu.addAction(get_svg_icon("queue", tok("accent"), 16), "Đổi tên hàng đợi kéo thả thư mục hiện tại...")
             act_queue.triggered.connect(lambda: self._open_queue_rename_dialog())
 
-        act_convert = menu.addAction(get_svg_icon("convert", "#38bdf8", 16), "Chuyển đổi định dạng (Ctrl+Shift+C)")
+        act_convert = menu.addAction(get_svg_icon("convert", tok("accent"), 16), "Chuyển đổi định dạng (Ctrl+Shift+C)")
         act_convert.triggered.connect(lambda: self._open_convert_dialog(target_folder=selected_folders[0] if selected_folders else None))
 
         menu.addSeparator()
 
-        act_meta = menu.addAction(get_svg_icon("shield", "#38bdf8", 16), "Xóa Metadata")
+        act_meta = menu.addAction(get_svg_icon("shield", tok("accent"), 16), "Xóa Metadata")
         act_meta.triggered.connect(lambda: self._strip_metadata(target_folder=selected_folders[0] if selected_folders else None))
 
-        act_org = menu.addAction(get_svg_icon("folder_plus", "#38bdf8", 16), "Tự động sắp xếp")
+        act_org = menu.addAction(get_svg_icon("folder_plus", tok("accent"), 16), "Tự động sắp xếp")
         act_org.triggered.connect(lambda: self._open_organize_dialog(target_folder=selected_folders[0] if selected_folders else None))
 
         menu.addSeparator()
 
-        act_insp = menu.addAction(get_svg_icon("inspector", "#38bdf8", 16), "Kiểm định tệp này")
+        act_insp = menu.addAction(get_svg_icon("inspector", tok("accent"), 16), "Kiểm định tệp này")
         act_insp.triggered.connect(lambda: self.tab_widget.setCurrentIndex(2))
 
         menu.exec(global_pos)
@@ -1045,8 +1048,8 @@ class MainWindow(QMainWindow):
             pass
 
         # 3. Dynamic styling for glassmorphism / wallpaper mode
-        qss_path = Path(__file__).parent / "styles" / "dark_theme.qss"
-        base_qss = qss_path.read_text(encoding="utf-8") if qss_path.exists() else ""
+        # Base Explorer stylesheet lives at app level (ui.theme); only overlays go here
+        base_qss = ""
 
         if mode == "blur":
             # blur_opacity: 0 = fully transparent, 100 = dark frosted

@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QTreeView, QLabel,
     QHBoxLayout, QToolButton, QSizePolicy,
 )
+from ui.theme import style
 
 
 class TreePanel(QWidget):
@@ -32,10 +33,10 @@ class TreePanel(QWidget):
 
         # Header label
         header = QLabel("  📁  Thư mục")
-        header.setStyleSheet(
-            "background-color: #2c2c2e; color: #8e8e93; "
+        style(header, 
+            "background-color: @fill_hover; color: @text_secondary; "
             "padding: 8px 8px; font-size: 8.5pt; font-weight: 600; "
-            "border-bottom: 1px solid #3a3a3c;"
+            "border-bottom: 1px solid @stroke_control;"
         )
         layout.addWidget(header)
 

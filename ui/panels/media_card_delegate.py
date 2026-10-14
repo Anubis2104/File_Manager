@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
 
 from ui.widgets.svg_icons import get_svg_pixmap
 from utils.file_utils import IMAGE_EXTS, VIDEO_EXTS, RAW_EXTS
+from ui.theme import qcolor, tok
 
 
 class MediaCardDelegate(QStyledItemDelegate):
@@ -61,16 +62,16 @@ class MediaCardDelegate(QStyledItemDelegate):
 
         # ── 1. Draw Card Background & Border ──
         if is_selected:
-            bg_color = QColor("#0c2340")
-            border_color = QColor("#38bdf8")
+            bg_color = qcolor("fill_selected")   # Explorer: neutral selection fill, accent outline
+            border_color = qcolor("accent")
             border_width = 1.5
         elif is_hover:
-            bg_color = QColor("#1e293b")
-            border_color = QColor("#475569")
+            bg_color = qcolor("fill_hover")
+            border_color = qcolor("fill_selected")
             border_width = 1.0
         else:
-            bg_color = QColor("#111827")
-            border_color = QColor("#1e293b")
+            bg_color = qcolor("bg_layer")
+            border_color = qcolor("fill_hover")
             border_width = 1.0
 
         painter.setBrush(QBrush(bg_color))
@@ -81,22 +82,22 @@ class MediaCardDelegate(QStyledItemDelegate):
         thumb_area = QRect(rect.x() + 6, rect.y() + 6, rect.width() - 12, self.THUMB_HEIGHT)
 
         # Inner thumbnail backdrop
-        painter.setBrush(QBrush(QColor("#0b0f19")))
+        painter.setBrush(QBrush(qcolor("bg_base")))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawRoundedRect(thumb_area, 6.0, 6.0)
 
         badge_text = ""
-        badge_bg = QColor("#1e293b")
-        badge_fg = QColor("#94a3b8")
+        badge_bg = qcolor("fill_hover")
+        badge_fg = qcolor("text_secondary")
 
         if is_dir:
-            pix = get_svg_pixmap("folder", "#38bdf8", 40)
+            pix = get_svg_pixmap("folder", tok("accent"), 40)
             target_x = thumb_area.x() + (thumb_area.width() - 40) // 2
             target_y = thumb_area.y() + (thumb_area.height() - 40) // 2
             painter.drawPixmap(target_x, target_y, pix)
             badge_text = "DIR"
-            badge_bg = QColor("#0369a1")
-            badge_fg = QColor("#ffffff")
+            badge_bg = qcolor("fill_selected")
+            badge_fg = qcolor("text_primary")
         else:
             ext = path.suffix.lower()
             if ext in IMAGE_EXTS:
@@ -106,19 +107,19 @@ class MediaCardDelegate(QStyledItemDelegate):
                     target_y = thumb_area.y() + (thumb_area.height() - pix.height()) // 2
                     painter.drawPixmap(target_x, target_y, pix)
                 else:
-                    icon_pix = get_svg_pixmap("image", "#38bdf8", 36)
+                    icon_pix = get_svg_pixmap("image", tok("accent"), 36)
                     painter.drawPixmap(thumb_area.x() + (thumb_area.width() - 36) // 2,
                                        thumb_area.y() + (thumb_area.height() - 36) // 2, icon_pix)
                 badge_text = ext.lstrip(".").upper()
-                badge_bg = QColor("#0369a1")
-                badge_fg = QColor("#ffffff")
+                badge_bg = qcolor("fill_selected")
+                badge_fg = qcolor("text_primary")
             elif ext in RAW_EXTS:
-                icon_pix = get_svg_pixmap("camera", "#f59e0b", 36)
+                icon_pix = get_svg_pixmap("camera", tok("warning"), 36)
                 painter.drawPixmap(thumb_area.x() + (thumb_area.width() - 36) // 2,
                                    thumb_area.y() + (thumb_area.height() - 36) // 2, icon_pix)
                 badge_text = "RAW"
-                badge_bg = QColor("#78350f")
-                badge_fg = QColor("#fef3c7")
+                badge_bg = qcolor("warning_bg")
+                badge_fg = qcolor("warning")
             elif ext in VIDEO_EXTS:
                 icon_pix = get_svg_pixmap("video", "#c084fc", 36)
                 painter.drawPixmap(thumb_area.x() + (thumb_area.width() - 36) // 2,
@@ -127,12 +128,12 @@ class MediaCardDelegate(QStyledItemDelegate):
                 badge_bg = QColor("#581c87")
                 badge_fg = QColor("#f3e8ff")
             else:
-                icon_pix = get_svg_pixmap("file", "#94a3b8", 36)
+                icon_pix = get_svg_pixmap("file", tok("text_secondary"), 36)
                 painter.drawPixmap(thumb_area.x() + (thumb_area.width() - 36) // 2,
                                    thumb_area.y() + (thumb_area.height() - 36) // 2, icon_pix)
                 badge_text = ext.lstrip(".").upper() if ext else "FILE"
-                badge_bg = QColor("#1e293b")
-                badge_fg = QColor("#94a3b8")
+                badge_bg = qcolor("fill_hover")
+                badge_fg = qcolor("text_secondary")
 
         # ── 3. Draw Badge Pill in Corner ──
         if badge_text:
@@ -154,7 +155,7 @@ class MediaCardDelegate(QStyledItemDelegate):
         name_rect = QRect(rect.x() + 6, thumb_area.bottom() + 4, rect.width() - 12, 18)
         title_font = QFont(painter.font().family(), 8, QFont.Weight.Medium)
         painter.setFont(title_font)
-        painter.setPen(QColor("#ffffff" if is_selected else "#f1f5f9"))
+        painter.setPen(qcolor("text_primary"))
 
         fm_title = QFontMetrics(title_font)
         elided_name = fm_title.elidedText(path.name, Qt.TextElideMode.ElideMiddle, name_rect.width())
@@ -164,7 +165,7 @@ class MediaCardDelegate(QStyledItemDelegate):
         sub_rect = QRect(rect.x() + 6, name_rect.bottom() + 1, rect.width() - 12, 14)
         sub_font = QFont(painter.font().family(), 7, QFont.Weight.Normal)
         painter.setFont(sub_font)
-        painter.setPen(QColor("#38bdf8" if is_selected else "#64748b"))
+        painter.setPen(QColor(tok("accent") if is_selected else tok("text_tertiary")))
 
         if is_dir:
             sub_text = "Thư mục"

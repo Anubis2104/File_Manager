@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
 from core.inspector import format_bytes, repair_jpeg_header
 from core.workers import InspectorWorker, TrimOverlayWorker
 from ui.widgets.progress_dialog import TaskProgressDialog
+from ui.theme import qcolor
 
 
 class StatCard(QFrame):
@@ -292,11 +293,11 @@ class InspectorPanel(QWidget):
 
         status = item.get("status", "")
         if status == "CLEAN":
-            item_status.setForeground(QBrush(QColor("#10b981")))  # emerald
+            item_status.setForeground(QBrush(qcolor("success")))  # emerald
         elif status == "OVERLAY":
-            item_status.setForeground(QBrush(QColor("#f59e0b")))  # amber
+            item_status.setForeground(QBrush(qcolor("warning")))  # amber
         elif status in ("CORRUPTED", "ERROR"):
-            item_status.setForeground(QBrush(QColor("#f43f5e")))  # rose
+            item_status.setForeground(QBrush(qcolor("danger")))  # rose
         elif status in ("THREAT", "QUARANTINED"):
             item_status.setForeground(QBrush(QColor("#ec4899")))  # pink/purple
 

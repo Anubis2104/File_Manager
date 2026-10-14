@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
     QScrollArea, QFrame, QMenu, QApplication, QSizePolicy,
 )
 from ui.widgets.svg_icons import get_svg_icon, get_svg_pixmap
+from ui.theme import style, tok
 
 
 class TabItemData:
@@ -66,7 +67,7 @@ class WorkspaceTabButton(QFrame):
         # Vector Folder Icon
         self.lbl_icon = QLabel()
         self.lbl_icon.setFixedSize(16, 16)
-        self.lbl_icon.setPixmap(get_svg_pixmap("folder", "#38bdf8" if self.is_active else "#94a3b8", 14))
+        self.lbl_icon.setPixmap(get_svg_pixmap("folder", tok("accent") if self.is_active else tok("text_secondary"), 14))
         lay.addWidget(self.lbl_icon)
 
         # Title
@@ -77,21 +78,21 @@ class WorkspaceTabButton(QFrame):
 
         # Close button
         self.btn_close = QToolButton()
-        self.btn_close.setIcon(get_svg_icon("close", "#94a3b8", 12, "#ef4444"))
+        self.btn_close.setIcon(get_svg_icon("close", tok("text_secondary"), 12, tok("danger")))
         self.btn_close.setIconSize(QSize(12, 12))
         self.btn_close.setToolTip("Đóng tab (Ctrl+W)")
         self.btn_close.setFixedSize(18, 18)
         self.btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_close.setStyleSheet(
+        style(self.btn_close, 
             "QToolButton { background: transparent; border: none; border-radius: 9px; padding: 0px; } "
-            "QToolButton:hover { background: #334155; }"
+            "QToolButton:hover { background: @fill_selected; }"
         )
         self.btn_close.clicked.connect(lambda: self.close_clicked.emit(self.index))
         lay.addWidget(self.btn_close)
 
     def set_active(self, active: bool):
         self.is_active = active
-        self.lbl_icon.setPixmap(get_svg_pixmap("folder", "#38bdf8" if self.is_active else "#94a3b8", 14))
+        self.lbl_icon.setPixmap(get_svg_pixmap("folder", tok("accent") if self.is_active else tok("text_secondary"), 14))
         self._apply_style()
 
     def set_data(self, data: TabItemData):
@@ -101,22 +102,22 @@ class WorkspaceTabButton(QFrame):
 
     def _apply_style(self):
         if self.is_active:
-            self.setStyleSheet(
-                "WorkspaceTabButton { background-color: #0e1526; border-top: 2px solid #38bdf8; "
-                "border-left: 1px solid #1e293b; border-right: 1px solid #1e293b; "
-                "border-bottom: 1px solid #0e1526; border-top-left-radius: 6px; "
+            style(self, 
+                "WorkspaceTabButton { background-color: @bg_layer; border-top: 2px solid @accent; "
+                "border-left: 1px solid @stroke_divider; border-right: 1px solid @stroke_divider; "
+                "border-bottom: 1px solid @stroke_divider; border-top-left-radius: 6px; "
                 "border-top-right-radius: 6px; }"
             )
-            self.lbl_title.setStyleSheet("color: #f8fafc; font-size: 8.5pt; font-weight: 600;")
+            style(self.lbl_title, "color: @text_primary; font-size: 8.5pt; font-weight: 600;")
         else:
-            self.setStyleSheet(
-                "WorkspaceTabButton { background-color: #080c14; border-top: 2px solid transparent; "
-                "border-left: 1px solid transparent; border-right: 1px solid #1e293b; "
-                "border-bottom: 1px solid #1e293b; border-top-left-radius: 6px; "
+            style(self, 
+                "WorkspaceTabButton { background-color: @bg_base; border-top: 2px solid transparent; "
+                "border-left: 1px solid transparent; border-right: 1px solid @stroke_divider; "
+                "border-bottom: 1px solid @stroke_divider; border-top-left-radius: 6px; "
                 "border-top-right-radius: 6px; }"
-                "WorkspaceTabButton:hover { background-color: #111827; }"
+                "WorkspaceTabButton:hover { background-color: @bg_layer; }"
             )
-            self.lbl_title.setStyleSheet("color: #94a3b8; font-size: 8.5pt; font-weight: 500;")
+            style(self.lbl_title, "color: @text_secondary; font-size: 8.5pt; font-weight: 500;")
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
@@ -145,7 +146,7 @@ class WorkspaceTabBar(QWidget):
 
     def _build_ui(self):
         self.setFixedHeight(36)
-        self.setStyleSheet("background-color: #080c14; border-bottom: 1px solid #1e293b;")
+        style(self, "background-color: @bg_base; border-bottom: 1px solid @stroke_divider;")
 
         main_lay = QHBoxLayout(self)
         main_lay.setContentsMargins(4, 4, 4, 0)
@@ -171,15 +172,15 @@ class WorkspaceTabBar(QWidget):
 
         # New Tab Button [+]
         self.btn_new_tab = QToolButton()
-        self.btn_new_tab.setIcon(get_svg_icon("plus", "#94a3b8", 14, "#38bdf8"))
+        self.btn_new_tab.setIcon(get_svg_icon("plus", tok("text_secondary"), 14, tok("accent")))
         self.btn_new_tab.setIconSize(QSize(14, 14))
         self.btn_new_tab.setToolTip("Mở tab mới (Ctrl+T)")
         self.btn_new_tab.setFixedSize(26, 26)
         self.btn_new_tab.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_new_tab.setStyleSheet(
+        style(self.btn_new_tab, 
             "QToolButton { background: transparent; border: 1px solid transparent; "
             "border-radius: 5px; } "
-            "QToolButton:hover { background: #1e293b; border-color: #334155; }"
+            "QToolButton:hover { background: @fill_hover; border-color: @stroke_control; }"
         )
         self.btn_new_tab.clicked.connect(self._on_new_tab_clicked)
         main_lay.addWidget(self.btn_new_tab)

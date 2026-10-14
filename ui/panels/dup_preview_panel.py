@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
 
 from duplicate.dup_manager import DupFileItem, DupGroup
 from ui.widgets.progress_dialog import TaskProgressDialog
+from ui.theme import style, tok
 
 
 class ThumbnailCard(QFrame):
@@ -49,8 +50,8 @@ class ThumbnailCard(QFrame):
         self.thumb_lbl = QLabel()
         self.thumb_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.thumb_lbl.setFixedSize(self.THUMB_W, self.THUMB_H)
-        self.thumb_lbl.setStyleSheet(
-            "background: #1c1c1e; border-radius: 6px; color: #636366; font-size: 8pt;"
+        style(self.thumb_lbl, 
+            "background: @bg_base; border-radius: 6px; color: @text_tertiary; font-size: 8pt;"
         )
         self._load_thumb()
         layout.addWidget(self.thumb_lbl, alignment=Qt.AlignmentFlag.AlignHCenter)
@@ -74,7 +75,7 @@ class ThumbnailCard(QFrame):
         name_lbl = QLabel(self.item.path.name)
         name_lbl.setWordWrap(True)
         name_lbl.setMaximumWidth(self.THUMB_W + 8)
-        name_lbl.setStyleSheet("color: #aeaeb2; font-size: 8pt;")
+        style(name_lbl, "color: @text_secondary; font-size: 8pt;")
         name_lbl.setToolTip(str(self.item.path))
         layout.addWidget(name_lbl)
 
@@ -87,7 +88,7 @@ class ThumbnailCard(QFrame):
         res = f"{self.item.width}×{self.item.height}" if self.item.width else ""
         meta_str = "  ".join(filter(None, [res, sz_str, self.item.created or ""]))
         meta_lbl = QLabel(meta_str)
-        meta_lbl.setStyleSheet("color: #636366; font-size: 7.5pt;")
+        style(meta_lbl, "color: @text_tertiary; font-size: 7.5pt;")
         meta_lbl.setWordWrap(True)
         layout.addWidget(meta_lbl)
 
@@ -174,7 +175,7 @@ class DupGroupWidget(QFrame):
 
         title = QLabel(
             f"<b>Nhóm #{self.group.group_id}</b>  "
-            f"<span style='color:#8e8e93;font-size:8.5pt;'>"
+            f"<span style='color:{tok('text_secondary')};font-size:8.5pt;'>"
             f"{len(self.group.files)} file trùng lặp</span>"
         )
         hdr.addWidget(title)
@@ -182,8 +183,8 @@ class DupGroupWidget(QFrame):
 
         self.collapse_btn = QToolButton()
         self.collapse_btn.setText("▾")
-        self.collapse_btn.setStyleSheet(
-            "background: transparent; border: none; color: #8e8e93; font-size: 10.5pt;"
+        style(self.collapse_btn, 
+            "background: transparent; border: none; color: @text_secondary; font-size: 10.5pt;"
         )
         self.collapse_btn.clicked.connect(self._toggle_collapse)
         hdr.addWidget(self.collapse_btn)
@@ -211,7 +212,7 @@ class DupGroupWidget(QFrame):
         total_size = sum(f.size_bytes for f in self.group.files)
         sz_mb = total_size / 1048576
         footer = QLabel(
-            f"<span style='color:#636366;font-size:8pt;'>"
+            f"<span style='color:{tok('text_tertiary')};font-size:8pt;'>"
             f"Tổng dung lượng nhóm: {sz_mb:.2f} MB</span>"
         )
         self.main_layout.addWidget(footer)
@@ -254,15 +255,15 @@ class DupPreviewPanel(QWidget):
 
         # ── Top bar ──
         top_bar = QWidget()
-        top_bar.setStyleSheet(
-            "background: #2c2c2e; border-bottom: 1px solid #3a3a3c;"
+        style(top_bar, 
+            "background: @fill_hover; border-bottom: 1px solid @stroke_control;"
         )
         top_layout = QHBoxLayout(top_bar)
         top_layout.setContentsMargins(12, 8, 12, 8)
 
         # Summary stats
         self.lbl_summary = QLabel("Chưa quét. Nhấn 'Bắt đầu quét' để tìm file trùng lặp.")
-        self.lbl_summary.setStyleSheet("color: #8e8e93; font-size: 9pt;")
+        style(self.lbl_summary, "color: @text_secondary; font-size: 9pt;")
         top_layout.addWidget(self.lbl_summary)
         top_layout.addStretch()
 
@@ -308,7 +309,7 @@ class DupPreviewPanel(QWidget):
             "Chọn thư mục và nhấn 'Bắt đầu quét'."
         )
         self.placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.placeholder.setStyleSheet("color: #636366; font-size: 10.5pt;")
+        style(self.placeholder, "color: @text_tertiary; font-size: 10.5pt;")
         self.groups_layout.addWidget(self.placeholder)
 
         scroll.setWidget(self.groups_container)

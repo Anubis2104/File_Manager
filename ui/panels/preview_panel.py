@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
 
 from utils.file_utils import classify_extension
 from utils.media_info import get_media_dimensions
+from ui.theme import style
 
 
 class PreviewPanel(QWidget):
@@ -31,8 +32,8 @@ class PreviewPanel(QWidget):
 
         # Header
         hdr = QLabel("  👁  Preview")
-        hdr.setStyleSheet(
-            "color: #8e8e93; font-size: 8.5pt; font-weight: 600;"
+        style(hdr, 
+            "color: @text_secondary; font-size: 8.5pt; font-weight: 600;"
         )
         layout.addWidget(hdr)
 
@@ -40,8 +41,8 @@ class PreviewPanel(QWidget):
         self.thumb = QLabel()
         self.thumb.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.thumb.setFixedHeight(240)
-        self.thumb.setStyleSheet(
-            "background: #2c2c2e; border-radius: 10px; color: #636366;"
+        style(self.thumb, 
+            "background: @fill_hover; border-radius: 10px; color: @text_tertiary;"
         )
         self.thumb.setText("Chọn file để xem preview")
         layout.addWidget(self.thumb)
@@ -50,8 +51,8 @@ class PreviewPanel(QWidget):
         self.info_label = QLabel()
         self.info_label.setWordWrap(True)
         self.info_label.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
-        self.info_label.setStyleSheet(
-            "color: #aeaeb2; font-size: 8.5pt; background: #2c2c2e; "
+        style(self.info_label, 
+            "color: @text_secondary; font-size: 8.5pt; background: @fill_hover; "
             "border-radius: 8px; padding: 8px;"
         )
         self.info_label.setText("")

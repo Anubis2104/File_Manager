@@ -8,6 +8,7 @@ from pathlib import Path
 
 from PyQt6.QtCore    import Qt
 from PyQt6.QtWidgets import QStatusBar, QLabel, QWidget, QHBoxLayout
+from ui.theme import style
 
 
 class AppStatusBar(QStatusBar):
@@ -19,18 +20,18 @@ class AppStatusBar(QStatusBar):
     def _build_widgets(self):
         # Left: path info
         self.lbl_path = QLabel("Sẵn sàng")
-        self.lbl_path.setStyleSheet("color: #8e8e93; font-size: 8.5pt;")
+        style(self.lbl_path, "color: @text_secondary; font-size: 8.5pt;")
         self.addWidget(self.lbl_path, 1)
 
         # Center: selection info
         self.lbl_selection = QLabel("")
-        self.lbl_selection.setStyleSheet("color: #636366; font-size: 8.5pt;")
+        style(self.lbl_selection, "color: @text_tertiary; font-size: 8.5pt;")
         self.addWidget(self.lbl_selection, 1)
 
         # Right: CUDA badge
         self.lbl_cuda = QLabel()
-        self.lbl_cuda.setStyleSheet(
-            "background: #30d15822; color: #30d158; border: 1px solid #30d15844; "
+        style(self.lbl_cuda, 
+            "background: #30d15822; color: @success; border: 1px solid #30d15844; "
             "border-radius: 4px; padding: 1px 8px; font-size: 8pt; font-weight: 600;"
         )
         self.addPermanentWidget(self.lbl_cuda)
@@ -44,8 +45,8 @@ class AppStatusBar(QStatusBar):
     def set_cuda_info(self, info_str: str):
         if "Not available" in info_str or "missing" in info_str:
             self.lbl_cuda.setText("CPU Mode")
-            self.lbl_cuda.setStyleSheet(
-                "background: #ff9f0a22; color: #ff9f0a; border: 1px solid #ff9f0a44; "
+            style(self.lbl_cuda, 
+                "background: #ff9f0a22; color: @warning; border: 1px solid #ff9f0a44; "
                 "border-radius: 4px; padding: 1px 8px; font-size: 8pt; font-weight: 600;"
             )
         else:

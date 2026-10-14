@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.widgets.svg_icons import get_svg_icon, get_svg_pixmap
+from ui.theme import style, tok
 
 
 class BreadcrumbPill(QPushButton):
@@ -27,15 +28,15 @@ class BreadcrumbPill(QPushButton):
         self.path = path
         self.setText(f" {text}")
         icon_name = "drive" if is_drive else "folder"
-        icon_color = "#38bdf8" if is_drive else "#cbd5e1"
+        icon_color = tok("accent") if is_drive else tok("text_secondary")
         self.setIcon(get_svg_icon(icon_name, icon_color, 14))
         self.setIconSize(QSize(14, 14))
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFixedHeight(24)
-        self.setStyleSheet(
-            "QPushButton { background-color: #1e293b; color: #cbd5e1; border: 1px solid #334155; "
+        style(self, 
+            "QPushButton { background-color: @fill_hover; color: @text_secondary; border: 1px solid @stroke_control; "
             "border-radius: 4px; padding: 2px 8px; font-size: 8.5pt; font-weight: 500; } "
-            "QPushButton:hover { background-color: #334155; color: #38bdf8; border-color: #38bdf8; }"
+            "QPushButton:hover { background-color: @fill_selected; color: @accent; border-color: @accent; }"
         )
 
 
@@ -60,10 +61,10 @@ class BreadcrumbAddressBar(QWidget):
         # ── Page 0: Breadcrumb container ──
         self.crumb_widget = QFrame()
         self.crumb_widget.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.crumb_widget.setStyleSheet(
-            "QFrame { background-color: #111827; border: 1px solid #1e293b; "
+        style(self.crumb_widget, 
+            "QFrame { background-color: @bg_layer; border: 1px solid @stroke_divider; "
             "border-radius: 6px; padding: 1px 4px; } "
-            "QFrame:hover { border-color: #334155; }"
+            "QFrame:hover { border-color: @stroke_control; }"
         )
         self.crumb_layout = QHBoxLayout(self.crumb_widget)
         self.crumb_layout.setContentsMargins(4, 2, 4, 2)
@@ -118,8 +119,8 @@ class BreadcrumbAddressBar(QWidget):
             self.set_path(path)
             self.navigate_requested.emit(path)
         else:
-            self.line_edit.setStyleSheet(
-                "border: 1px solid #ef4444; background-color: #2c1c1c;"
+            style(self.line_edit, 
+                "border: 1px solid @danger; background-color: @danger_bg;"
             )
 
     def eventFilter(self, obj, event):
@@ -155,20 +156,20 @@ class BreadcrumbAddressBar(QWidget):
 
             if idx < len(parts) - 1:
                 sep = QLabel("❯")
-                sep.setStyleSheet("color: #475569; font-size: 7.5pt; font-weight: bold;")
+                style(sep, "color: @text_disabled; font-size: 7.5pt; font-weight: bold;")
                 self.crumb_layout.addWidget(sep)
 
         self.crumb_layout.addStretch()
 
         # Edit button on far right
         btn_edit = QPushButton()
-        btn_edit.setIcon(get_svg_icon("rename", "#94a3b8", 14, "#38bdf8"))
+        btn_edit.setIcon(get_svg_icon("rename", tok("text_secondary"), 14, tok("accent")))
         btn_edit.setIconSize(QSize(14, 14))
         btn_edit.setToolTip("Nhập đường dẫn trực tiếp (Ctrl+L)")
         btn_edit.setFixedSize(22, 22)
-        btn_edit.setStyleSheet(
+        style(btn_edit, 
             "QPushButton { background: transparent; border: none; } "
-            "QPushButton:hover { background: #1e293b; border-radius: 4px; }"
+            "QPushButton:hover { background: @fill_hover; border-radius: 4px; }"
         )
         btn_edit.clicked.connect(self.focus_edit)
         self.crumb_layout.addWidget(btn_edit)
@@ -192,7 +193,7 @@ class AppToolBar(QToolBar):
     def _build_actions(self):
         # ── Back ──
         self.btn_back = QToolButton()
-        self.btn_back.setIcon(get_svg_icon("arrow_left", "#94a3b8", 16, "#38bdf8"))
+        self.btn_back.setIcon(get_svg_icon("arrow_left", tok("text_secondary"), 16, tok("accent")))
         self.btn_back.setIconSize(QSize(16, 16))
         self.btn_back.setToolTip("Quay lại (Alt+Left)")
         self.btn_back.setEnabled(False)
@@ -201,7 +202,7 @@ class AppToolBar(QToolBar):
 
         # ── Forward ──
         self.btn_fwd = QToolButton()
-        self.btn_fwd.setIcon(get_svg_icon("arrow_right", "#94a3b8", 16, "#38bdf8"))
+        self.btn_fwd.setIcon(get_svg_icon("arrow_right", tok("text_secondary"), 16, tok("accent")))
         self.btn_fwd.setIconSize(QSize(16, 16))
         self.btn_fwd.setToolTip("Tiến lên (Alt+Right)")
         self.btn_fwd.setEnabled(False)
@@ -210,7 +211,7 @@ class AppToolBar(QToolBar):
 
         # ── Up ──
         self.btn_up = QToolButton()
-        self.btn_up.setIcon(get_svg_icon("arrow_up", "#94a3b8", 16, "#38bdf8"))
+        self.btn_up.setIcon(get_svg_icon("arrow_up", tok("text_secondary"), 16, tok("accent")))
         self.btn_up.setIconSize(QSize(16, 16))
         self.btn_up.setToolTip("Lên thư mục cha (Alt+Up)")
         self.btn_up.clicked.connect(self.go_up)
@@ -232,7 +233,7 @@ class AppToolBar(QToolBar):
 
         # ── Command Palette Quick Launcher Button ──
         self.btn_palette = QToolButton()
-        self.btn_palette.setIcon(get_svg_icon("command", "#38bdf8", 16))
+        self.btn_palette.setIcon(get_svg_icon("command", tok("accent"), 16))
         self.btn_palette.setIconSize(QSize(16, 16))
         self.btn_palette.setToolTip("Mở Command Palette (Ctrl+K / Ctrl+P)")
         self.btn_palette.clicked.connect(self.palette_requested.emit)

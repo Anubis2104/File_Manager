@@ -30,6 +30,7 @@ from core.logger import RenameLogger
 from core.workers import RenameWorker
 from utils.file_utils import RenameOperation, IMAGE_EXTS, VIDEO_EXTS
 from ui.widgets.progress_dialog import TaskProgressDialog
+from ui.theme import qcolor, style, theme
 
 
 class QueueDropTable(QTableWidget):
@@ -47,11 +48,11 @@ class QueueDropTable(QTableWidget):
         self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.verticalHeader().setVisible(False)
         self.setShowGrid(False)
-        self.setStyleSheet(
-            "QTableWidget { background-color: #1c1c1e; gridline-color: #2c2c2e; "
-            "border: 1px solid #3a3a3c; border-radius: 6px; }"
-            "QTableWidget::item { padding: 4px 6px; border-bottom: 1px solid #28282a; }"
-            "QTableWidget::item:selected { background-color: #0a84ff; color: white; }"
+        style(self, 
+            "QTableWidget { background-color: @bg_base; gridline-color: @stroke_divider; "
+            "border: 1px solid @stroke_control; border-radius: 6px; }"
+            "QTableWidget::item { padding: 4px 6px; border-bottom: 1px solid @stroke_divider; }"
+            "QTableWidget::item:selected { background-color: @fill_selected; color: @text_primary; }"
         )
 
     def dragEnterEvent(self, event):
@@ -156,7 +157,7 @@ class QueueDockWidget(QWidget):
         self._thread: Optional[QThread] = None
 
         self._placeholder_pix = QPixmap(36, 36)
-        self._placeholder_pix.fill(QColor("#2c2c2e"))
+        self._placeholder_pix.fill(qcolor("fill_hover"))
 
         self._build_ui()
 
@@ -168,17 +169,17 @@ class QueueDockWidget(QWidget):
         # ── Header: Title & Close Button ──
         hdr_bar = QHBoxLayout()
         lbl_title = QLabel("🔢 Hàng đợi Đổi tên (Kéo thả)")
-        lbl_title.setStyleSheet("font-weight: 700; font-size: 9.5pt; color: #0a84ff;")
+        style(lbl_title, "font-weight: 700; font-size: 9.5pt; color: @accent;")
         hdr_bar.addWidget(lbl_title)
         hdr_bar.addStretch()
 
         btn_close = QPushButton("✕ Đóng")
         btn_close.setToolTip("Quay lại chế độ Xem trước thông thường")
         btn_close.setFixedHeight(24)
-        btn_close.setStyleSheet(
-            "QPushButton { background: #3a3a3c; color: #d1d1d6; border-radius: 4px; "
+        style(btn_close, 
+            "QPushButton { background: @fill_selected; color: @text_secondary; border-radius: 4px; "
             "padding: 2px 8px; font-size: 8.5pt; font-weight: 600; border: none; }"
-            "QPushButton:hover { background: #48484a; color: white; }"
+            "QPushButton:hover { background: @fill_selected; color: @text_primary; }"
         )
         btn_close.clicked.connect(self.close_requested.emit)
         hdr_bar.addWidget(btn_close)
@@ -198,32 +199,32 @@ class QueueDockWidget(QWidget):
         act_bar = QHBoxLayout()
         self.btn_load_all = QPushButton("➕ Nạp tất cả tệp")
         self.btn_load_all.setToolTip("Nạp toàn bộ tệp trong thư mục đang mở vào hàng đợi")
-        self.btn_load_all.setStyleSheet(
-            "QPushButton { background: #2c2c2e; color: #0a84ff; border: 1px solid #3a3a3c; "
+        style(self.btn_load_all, 
+            "QPushButton { background: @fill_hover; color: @accent; border: 1px solid @stroke_control; "
             "border-radius: 4px; padding: 3px 6px; font-size: 8pt; font-weight: 600; }"
-            "QPushButton:hover { background: #3a3a3c; }"
+            "QPushButton:hover { background: @fill_selected; }"
         )
         self.btn_load_all.clicked.connect(self.load_all_from_current_folder)
         act_bar.addWidget(self.btn_load_all)
 
         btn_sort_date = QPushButton("⚡ Ngày")
         btn_sort_date.setToolTip("Tự động sắp xếp theo ngày chụp/tạo cũ → mới")
-        btn_sort_date.setStyleSheet(self.btn_load_all.styleSheet())
+        style(btn_sort_date, theme().template(self.btn_load_all))
         btn_sort_date.clicked.connect(self._sort_by_date)
         act_bar.addWidget(btn_sort_date)
 
         btn_sort_name = QPushButton("⚡ Tên A-Z")
         btn_sort_name.setToolTip("Sắp xếp theo tên A-Z")
-        btn_sort_name.setStyleSheet(self.btn_load_all.styleSheet())
+        style(btn_sort_name, theme().template(self.btn_load_all))
         btn_sort_name.clicked.connect(self._sort_by_name)
         act_bar.addWidget(btn_sort_name)
 
         btn_clear = QPushButton("↺ Xóa")
         btn_clear.setToolTip("Làm trống hàng đợi")
-        btn_clear.setStyleSheet(
-            "QPushButton { background: #2c2c2e; color: #ff453a; border: 1px solid #3a3a3c; "
+        style(btn_clear, 
+            "QPushButton { background: @fill_hover; color: @danger; border: 1px solid @stroke_control; "
             "border-radius: 4px; padding: 3px 6px; font-size: 8pt; font-weight: 600; }"
-            "QPushButton:hover { background: #3a3a3c; }"
+            "QPushButton:hover { background: @fill_selected; }"
         )
         btn_clear.clicked.connect(self.clear_queue)
         act_bar.addWidget(btn_clear)
@@ -232,7 +233,7 @@ class QueueDockWidget(QWidget):
 
         # ── Drop hint ──
         self.lbl_hint = QLabel("💡 Kéo thả tệp từ Bảng giữa (Kho) vào đây")
-        self.lbl_hint.setStyleSheet("color: #8e8e93; font-size: 8pt; font-style: italic;")
+        style(self.lbl_hint, "color: @text_secondary; font-size: 8pt; font-style: italic;")
         self.lbl_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.lbl_hint)
 
@@ -250,18 +251,18 @@ class QueueDockWidget(QWidget):
 
         # ── Bottom Status & Execution ──
         self.lbl_summary = QLabel("0 tệp trong hàng đợi")
-        self.lbl_summary.setStyleSheet("color: #8e8e93; font-size: 8.5pt;")
+        style(self.lbl_summary, "color: @text_secondary; font-size: 8.5pt;")
         layout.addWidget(self.lbl_summary)
 
         self.btn_execute = QPushButton("✔ Thực hiện Đổi tên Hàng đợi")
         self.btn_execute.setObjectName("btnPrimary")
         self.btn_execute.setFixedHeight(34)
         self.btn_execute.setEnabled(False)
-        self.btn_execute.setStyleSheet(
-            "QPushButton { background: #0a84ff; color: white; font-weight: 700; "
+        style(self.btn_execute, 
+            "QPushButton { background: @accent; color: @text_on_accent; font-weight: 700; "
             "font-size: 9pt; border-radius: 6px; border: none; }"
-            "QPushButton:hover { background: #0071e3; }"
-            "QPushButton:disabled { background: #3a3a3c; color: #636366; }"
+            "QPushButton:hover { background: @accent; }"
+            "QPushButton:disabled { background: @fill_selected; color: @text_tertiary; }"
         )
         self.btn_execute.clicked.connect(self._execute_rename)
         layout.addWidget(self.btn_execute)
@@ -361,7 +362,7 @@ class QueueDockWidget(QWidget):
             # 1. STT Badge
             item_seq = QTableWidgetItem(f" #{seq_str} ")
             item_seq.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            item_seq.setForeground(QColor("#0a84ff"))
+            item_seq.setForeground(qcolor("accent"))
             font = item_seq.font()
             font.setBold(True)
             item_seq.setFont(font)
@@ -411,7 +412,7 @@ class QueueDockWidget(QWidget):
             btn_rm.setText("✖")
             btn_rm.setToolTip("Xóa khỏi hàng đợi")
             btn_rm.setFixedSize(20, 20)
-            btn_rm.setStyleSheet("color: #ff453a;")
+            style(btn_rm, "color: @danger;")
             btn_rm.clicked.connect(lambda _, row=i: self._remove_item(row))
             act_lay.addWidget(btn_rm)
 
@@ -591,7 +592,7 @@ class RightDockPanel(QWidget):
 
         # ── Top Segmented Pill Header ──
         top_bar = QWidget()
-        top_bar.setStyleSheet("background: #242426; border-bottom: 1px solid #3a3a3c;")
+        style(top_bar, "background: @bg_card; border-bottom: 1px solid @stroke_control;")
         tb_layout = QHBoxLayout(top_bar)
         tb_layout.setContentsMargins(6, 4, 6, 4)
         tb_layout.setSpacing(4)
@@ -608,11 +609,11 @@ class RightDockPanel(QWidget):
 
         for btn in (self.btn_mode_preview, self.btn_mode_queue):
             btn.setFixedHeight(26)
-            btn.setStyleSheet(
-                "QPushButton { background: transparent; color: #8e8e93; border: 1px solid transparent; "
+            style(btn, 
+                "QPushButton { background: transparent; color: @text_secondary; border: 1px solid transparent; "
                 "border-radius: 5px; padding: 2px 10px; font-size: 8.5pt; font-weight: 600; }"
-                "QPushButton:checked { background: #3a3a3c; color: #0a84ff; border-color: #0a84ff; }"
-                "QPushButton:hover:!checked { background: #2c2c2e; color: #d1d1d6; }"
+                "QPushButton:checked { background: @fill_selected; color: @accent; border-color: @accent; }"
+                "QPushButton:hover:!checked { background: @fill_hover; color: @text_secondary; }"
             )
             tb_layout.addWidget(btn)
 
