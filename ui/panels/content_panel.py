@@ -153,6 +153,7 @@ class ContentPanel(QWidget):
     create_folder_requested= pyqtSignal(Path)              # Target parent dir
     browse_folder_requested= pyqtSignal()
     files_dropped          = pyqtSignal(list, Path)        # (src_paths, dest_dir)
+    view_mode_changed      = pyqtSignal(str)               # 'grid' | 'detail'
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -326,10 +327,26 @@ class ContentPanel(QWidget):
         self.model.setNameFilterDisables(False)
 
     def _set_view(self, mode: str):
+        changed = mode != self._current_view_mode
         self._current_view_mode = mode
         self.view_btns_update(mode)
         if not self._is_empty:
             self._apply_view_stack()
+        if changed:
+            self.view_mode_changed.emit(mode)
+
+    def set_view(self, mode: str):
+        """Public view switch ('grid' | 'detail'), e.g. from the command bar."""
+        self._set_view(mode)
+
+    @property
+    def view_mode(self) -> str:
+        return self._current_view_mode
+
+    def sort_by(self, column: int, order: Qt.SortOrder):
+        """Sort both views (they share the model) like Explorer's Sort menu."""
+        self.detail_view.setSortingEnabled(True)
+        self.detail_view.sortByColumn(column, order)
 
     def _apply_view_stack(self):
         idx = 0 if self._current_view_mode == "grid" else 1

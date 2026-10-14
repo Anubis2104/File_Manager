@@ -18,6 +18,11 @@ QMainWindow[backdrop="system"] {
     background-color: @bg_base;
 }
 /* Address row shares the active tab's layer, as in Explorer */
+QToolBar#commandBar {
+    background-color: @bg_base;
+    padding: 4px 8px;
+    border-bottom: 1px solid @stroke_control;   /* Explorer's divider above the views */
+}
 QToolBar#addressRow {
     background-color: @layer_on_mica;
     padding: 6px 8px;

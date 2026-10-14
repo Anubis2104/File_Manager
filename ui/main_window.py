@@ -35,6 +35,8 @@ from ui.widgets.command_palette import CommandPaletteDialog, PaletteCommand
 from ui.widgets.svg_icons       import get_svg_icon
 from core.background_manager    import load_appearance_settings
 from ui.widgets.title_bar       import TitleBar
+from ui.widgets.command_bar     import CommandBar
+from core.file_ops              import invalid_filename_reason
 from ui.win_chrome              import IS_WINDOWS, WindowChrome
 from utils.cuda_helper          import get_cuda_info
 from ui.theme import theme, tok
@@ -118,88 +120,68 @@ class MainWindow(QMainWindow):
     # ─────────────────────────────────────────────
 
     def _build_menu_actions(self):
-        tb = QToolBar("Thao tác", self)
-        tb.setMovable(False)
-        tb.setObjectName("actionsToolbar")
-        tb.setIconSize(QSize(16, 16))
+        """App verbs as QActions, surfaced through the Explorer command bar."""
+        def action(icon: str, text: str, tip: str, slot) -> QAction:
+            act = QAction(get_svg_icon(icon, tok("accent"), 16), text, self)
+            act.setToolTip(tip)
+            act.triggered.connect(slot)
+            return act
 
-        # Rename action
-        self.act_rename = tb.addAction(get_svg_icon("rename", tok("accent"), 16), "Đổi tên hàng loạt")
-        self.act_rename.setToolTip("Đổi tên file theo cú pháp chuẩn (Ctrl+R)")
-        self.act_rename.triggered.connect(self._open_rename_dialog)
-        self.act_rename.setEnabled(True)
+        self.act_rename = action("rename", "Đổi tên hàng loạt", "Đổi tên file theo cú pháp chuẩn (Ctrl+R)",
+                                 lambda: self._open_rename_dialog())
+        self.act_queue_rename = action("queue", "Đổi tên hàng đợi (kéo thả)",
+                                       "Sắp xếp thứ tự kéo thả thủ công kèm đánh số thứ tự [STT]_[Tên cũ]",
+                                       lambda: self._open_queue_rename_dialog())
+        self.act_convert = action("convert", "Chuyển đổi định dạng", "Chuyển đổi ảnh/video sang định dạng khác",
+                                  lambda: self._open_convert_dialog())
+        self.act_strip_meta = action("shield", "Xóa metadata", "Xóa metadata, bảo toàn ngày tháng tạo gốc",
+                                     lambda: self._strip_metadata())
+        self.act_organize = action("folder_plus", "Tự động sắp xếp", "Gom nhóm file vào thư mục con theo ngày hoặc loại",
+                                   lambda: self._open_organize_dialog())
+        self.act_clean = action("trash", "Dọn thư mục rỗng", "Tìm và đưa thư mục rỗng vào thùng rác",
+                                self._clean_empty_folders)
+        self.act_duplicates = action("duplicate", "Tìm tệp trùng lặp", "Mở trang quản lý ảnh/video trùng lặp",
+                                     lambda: self._show_page(1))
+        self.act_inspector = action("inspector", "Kiểm định & bảo mật", "Kiểm định cấu trúc, gọt overlay và quét mã độc",
+                                    lambda: self._show_page(2))
+        self.act_stats = action("stats", "Thống kê", "Phân tích dung lượng và phân bổ file",
+                                lambda: self._open_stats_dialog())
+        self.act_palette = action("command", "Bảng lệnh (Ctrl+K)", "Tìm và chạy mọi lệnh",
+                                  lambda: self.command_palette.open_palette())
+        self.act_restore = action("refresh", "Khôi phục từ log", "Khôi phục tên gốc từ file log",
+                                  self._open_restore_dialog)
+        self.act_logcat = action("logcat", "Logcat (F12)", "Mở bảng điều khiển theo dõi Logcat trực tiếp (F12)",
+                                 self._open_logcat_dialog)
+        self.act_settings = action("settings", "Cài đặt", "Cấu hình hệ thống & AI", self._open_settings_dialog)
+        self.act_select_all = action("check", "Chọn tất cả", "Chọn tất cả (Ctrl+A)",
+                                     lambda: self._active_view().selectAll())
+        self.act_select_none = action("close", "Bỏ chọn", "Bỏ chọn tất cả",
+                                      lambda: self._active_view().clearSelection())
 
-        # Queue Rename action (Drag-and-drop sequential)
-        self.act_queue_rename = tb.addAction(get_svg_icon("queue", tok("accent"), 16), "Đổi tên Hàng đợi (Kéo thả)")
-        self.act_queue_rename.setToolTip("Sắp xếp thứ tự kéo thả thủ công kèm đánh số thứ tự [STT]_[Tên cũ]")
-        self.act_queue_rename.triggered.connect(lambda: self._open_queue_rename_dialog())
-        self.act_queue_rename.setEnabled(True)
-
-        tb.addSeparator()
-
-        # Convert action
-        self.act_convert = tb.addAction(get_svg_icon("convert", tok("accent"), 16), "Chuyển đổi định dạng")
-        self.act_convert.setToolTip("Chuyển đổi ảnh/video sang định dạng khác")
-        self.act_convert.triggered.connect(self._open_convert_dialog)
-
-        tb.addSeparator()
-
-        # Strip metadata
-        self.act_strip_meta = tb.addAction(get_svg_icon("shield", tok("accent"), 16), "Xóa Metadata")
-        self.act_strip_meta.setToolTip("Xóa metadata, bảo toàn ngày tháng tạo gốc")
-        self.act_strip_meta.triggered.connect(self._strip_metadata)
-        self.act_strip_meta.setEnabled(True)
-
-        tb.addSeparator()
-
-        # Clean empty folders
-        self.act_clean = tb.addAction(get_svg_icon("trash", tok("accent"), 16), "Xóa thư mục rỗng")
-        self.act_clean.setToolTip("Tìm và đưa thư mục rỗng vào thùng rác")
-        self.act_clean.triggered.connect(self._clean_empty_folders)
-
-        tb.addSeparator()
-
-        # Inspector action
-        self.act_inspector = tb.addAction(get_svg_icon("inspector", tok("accent"), 16), "Kiểm định Byte")
-        self.act_inspector.setToolTip("Kiểm định cấu trúc, gọt overlay và quét mã độc")
-        self.act_inspector.triggered.connect(lambda: self.tab_widget.setCurrentIndex(2))
-
-        tb.addSeparator()
-
-        # Restore from log
-        self.act_restore = tb.addAction(get_svg_icon("refresh", tok("accent"), 16), "Khôi phục từ Log")
-        self.act_restore.setToolTip("Khôi phục tên gốc từ file log")
-        self.act_restore.triggered.connect(self._open_restore_dialog)
-
-        tb.addSeparator()
-
-        # Auto Organize action
-        self.act_organize = tb.addAction(get_svg_icon("folder_plus", tok("accent"), 16), "Tự động sắp xếp")
-        self.act_organize.setToolTip("Gom nhóm file vào thư mục con theo ngày hoặc loại")
-        self.act_organize.triggered.connect(self._open_organize_dialog)
-
-        tb.addSeparator()
-
-        # Stats action
-        self.act_stats = tb.addAction(get_svg_icon("stats", tok("accent"), 16), "Thống kê")
-        self.act_stats.setToolTip("Phân tích dung lượng và phân bổ file")
-        self.act_stats.triggered.connect(self._open_stats_dialog)
-
-        tb.addSeparator()
-
-        # Settings action
-        self.act_settings = tb.addAction(get_svg_icon("settings", tok("accent"), 16), "Cài đặt")
-        self.act_settings.setToolTip("Cấu hình hệ thống & AI")
-        self.act_settings.triggered.connect(self._open_settings_dialog)
-
-        tb.addSeparator()
-
-        # Logcat action
-        self.act_logcat = tb.addAction(get_svg_icon("logcat", tok("accent"), 16), "Logcat (F12)")
-        self.act_logcat.setToolTip("Mở bảng điều khiển theo dõi Logcat trực tiếp (F12)")
-        self.act_logcat.triggered.connect(self._open_logcat_dialog)
-
-        self.addToolBar(Qt.ToolBarArea.BottomToolBarArea, tb)
+        self.command_bar = CommandBar(
+            tools_actions=[self.act_rename, self.act_queue_rename, self.act_convert, self.act_strip_meta,
+                           self.act_organize, self.act_clean, None,
+                           self.act_duplicates, self.act_inspector, None, self.act_stats],
+            more_actions=[self.act_select_all, self.act_select_none, None,
+                          self.act_palette, self.act_restore, self.act_logcat, None, self.act_settings],
+            parent=self,
+        )
+        self.addToolBarBreak()
+        self.addToolBar(self.command_bar)
+        cb = self.command_bar
+        cb.new_folder_requested.connect(lambda: self._create_new_folder(self.content_panel.current_dir or Path.home()))
+        cb.cut_requested.connect(lambda: self._clipboard_put(cut=True))
+        cb.copy_requested.connect(lambda: self._clipboard_put(cut=False))
+        cb.paste_requested.connect(self._paste_from_clipboard)
+        cb.rename_requested.connect(self._rename_selected)
+        cb.delete_requested.connect(self._delete_selected)
+        cb.sort_requested.connect(self.content_panel.sort_by)
+        cb.view_requested.connect(self.content_panel.set_view)
+        cb.details_toggled.connect(self.right_dock.setVisible)
+        self.content_panel.view_mode_changed.connect(cb.set_view_mode)
+        self.content_panel.selection_changed.connect(lambda _paths: self._update_command_state())
+        QApplication.clipboard().dataChanged.connect(self._update_command_state)
+        self._update_command_state()
 
     # ─────────────────────────────────────────────
     # Toolbar
@@ -225,8 +207,11 @@ class MainWindow(QMainWindow):
         root_layout.setContentsMargins(0, 0, 0, 0)
         root_layout.setSpacing(0)
 
+        # Pages: 0 = browser, 1 = duplicates, 2 = inspector. No visible tab strip:
+        # Explorer has none; the command bar's Tools menu opens pages 1-2.
         self.tab_widget = QTabWidget()
         self.tab_widget.setDocumentMode(True)
+        self.tab_widget.tabBar().hide()
         root_layout.addWidget(self.tab_widget)
 
         # ── Tab 1: File Explorer ──
@@ -511,6 +496,17 @@ class MainWindow(QMainWindow):
     def _setup_shortcuts(self):
         from PyQt6.QtGui import QShortcut
         QShortcut(QKeySequence("F5"),         self, activated=self._refresh)
+        # File verbs only while the file views have focus: Ctrl+C/V/X and Delete keep
+        # working normally in the address and search boxes.
+        for seq, slot in (("Ctrl+X", lambda: self._clipboard_put(cut=True)),
+                          ("Ctrl+C", lambda: self._clipboard_put(cut=False)),
+                          ("Ctrl+V", self._paste_from_clipboard),
+                          ("Delete", self._delete_selected),
+                          ("F2", self._rename_selected)):
+            QShortcut(QKeySequence(seq), self.content_panel, activated=slot,
+                      context=Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        QShortcut(QKeySequence("Ctrl+Shift+N"), self,
+                  activated=lambda: self._create_new_folder(self.content_panel.current_dir or Path.home()))
         QShortcut(QKeySequence("Alt+Left"),   self, activated=self.toolbar.go_back)
         QShortcut(QKeySequence("Alt+Right"),  self, activated=self.toolbar.go_forward)
         QShortcut(QKeySequence("Alt+Up"),     self, activated=self.toolbar.go_up)
@@ -540,6 +536,7 @@ class MainWindow(QMainWindow):
         logcat.i("UI:Navigation", f"Duyệt tới thư mục: {path}")
         if not from_tab_switch and hasattr(self, "workspace_tabs"):
             self.workspace_tabs.update_active_tab_path(path)
+        self._show_page(0)
         self.content_panel.load_directory(path)
         self.tree_panel.expand_to(path)
         self.toolbar.push_path(path)
@@ -549,6 +546,128 @@ class MainWindow(QMainWindow):
             self.right_dock.set_folder(path)
         self._current_scan_files = []
 
+
+    # ─────────────────────────────────────────────
+    # Command bar verbs (Explorer: New, Cut, Copy, Paste, Rename, Delete)
+    # ─────────────────────────────────────────────
+
+    def _show_page(self, index: int):
+        if self.tab_widget.currentIndex() != index:
+            self.tab_widget.setCurrentIndex(index)
+
+    def _active_view(self):
+        cp = self.content_panel
+        return cp.detail_view if cp.view_mode == "detail" else cp.grid_view
+
+    def _update_command_state(self):
+        from ui import clipboard
+        self.command_bar.update_state(
+            selection_count=len(self.content_panel.get_selected_paths()),
+            can_paste=clipboard.has_files() and self.content_panel.current_dir is not None,
+        )
+
+    def _clipboard_put(self, cut: bool):
+        from ui import clipboard
+        paths = self.content_panel.get_selected_paths()
+        if paths:
+            clipboard.set_files(paths, cut=cut)
+            self.app_statusbar.showMessage(
+                f"Đã {'cắt' if cut else 'sao chép'} {len(paths)} mục vào bộ nhớ tạm", 3000)
+
+    def _paste_from_clipboard(self):
+        from ui import clipboard
+        from core.workers import PasteWorker
+        sources, cut = clipboard.read_files()
+        dest = self.content_panel.current_dir
+        if not sources or dest is None:
+            return
+        dlg = TaskProgressDialog("Đang dán...", parent=self)
+        dlg.set_task("Đang di chuyển..." if cut else "Đang sao chép...", total=len(sources), icon="📋")
+        worker = PasteWorker(sources, dest, move=cut)
+        thread = QThread(self)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        dlg.attach_worker(worker)
+        dlg.cancelled.connect(worker.cancel, Qt.ConnectionType.DirectConnection)
+        worker.progress.connect(lambda d, t, n: dlg.update_progress(d, t, n))
+
+        def finish(thread_ok: bool):
+            thread.quit()
+            thread.wait(2000)
+            self._running_threads.discard(thread)
+            self._running_workers.discard(worker)
+
+        def done(results):
+            from core.file_ops import summarize
+            finish(True)
+            pasted, errors = summarize(results)
+            dlg.finish_task(f"Đã dán {pasted} mục")
+            if cut:
+                clipboard.clear_if_cut(sources)
+            self._refresh()
+            self.last_paste_results = results
+            if errors:
+                more = f"\n… và {len(errors) - 10} mục khác" if len(errors) > 10 else ""
+                QMessageBox.warning(self, "Một số mục không dán được", "\n".join(errors[:10]) + more)
+
+        def failed(msg):
+            finish(False)
+            dlg.cancel_task("Lỗi khi dán")
+            QMessageBox.critical(self, "Lỗi", msg)
+
+        worker.finished.connect(done)
+        worker.error.connect(failed)
+        self._running_threads.add(thread)
+        self._running_workers.add(worker)
+        dlg.show_centered()
+        thread.start()
+
+    def _rename_selected(self):
+        """F2: one item -> rename it (logged, restorable); several -> batch rename dialog."""
+        paths = self.content_panel.get_selected_paths()
+        if len(paths) > 1:
+            self._open_rename_dialog()
+            return
+        if not paths:
+            return
+        src = paths[0]
+        name, ok = QInputDialog.getText(self, "Đổi tên", "Tên mới:", text=src.name)
+        name = name.strip() if ok else ""
+        if not name or name == src.name:
+            return
+        error = invalid_filename_reason(name)
+        if error:
+            QMessageBox.warning(self, "Tên không hợp lệ", error)
+            return
+        dst = src.with_name(name)
+        if dst.exists() and dst.name.lower() != src.name.lower():
+            QMessageBox.warning(self, "Trùng tên", f"Đã có mục tên '{name}' trong thư mục này.")
+            return
+        from utils.file_utils import RenameOperation
+        from core.logger import RenameLogger
+        op = RenameOperation(src=src, dst=dst, dry_run=False)
+        if op.execute():
+            RenameLogger(Path("rename_log.jsonl")).log_rename_op(op)   # undo via "Khôi phục từ log"
+            self._refresh()
+        else:
+            QMessageBox.warning(self, "Không đổi tên được", op.error or "Lỗi không xác định")
+
+    def _delete_selected(self):
+        """Delete key: send to the Recycle Bin (Explorer does not confirm this by default)."""
+        paths = self.content_panel.get_selected_paths()
+        if not paths:
+            return
+        import send2trash
+        failed = []
+        for p in paths:
+            try:
+                send2trash.send2trash(str(p))
+            except Exception as exc:
+                failed.append(f"{p.name}: {exc}")
+        self._refresh()
+        self.app_statusbar.showMessage(f"Đã chuyển {len(paths) - len(failed)} mục vào Thùng rác", 4000)
+        if failed:
+            QMessageBox.warning(self, "Một số mục không xóa được", "\n".join(failed[:10]))
 
     def _refresh(self):
         current = self.content_panel.current_dir
