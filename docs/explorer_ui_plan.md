@@ -1,6 +1,6 @@
 # Kế hoạch: Giao diện giống Windows 11 File Explorer
 
-> Trạng thái: Gate 1 đã duyệt (2026-10-14) · **GĐ 0–1 xong** (2026-10-15) · tiếp theo: GĐ 2–3
+> Trạng thái: Gate 1 đã duyệt (2026-10-14) · **GĐ 0–3 xong** (2026-10-15) · tiếp theo: GĐ 4–5
 > Quyết định đã chốt (/grill-me): giống tối đa nhưng giữ tính năng riêng · theme theo hệ thống (sáng/tối + accent) ·
 > tính năng riêng đặt trên command bar + menu ⋯ · menu chuột phải kiểu Win11 + "Show more options" gốc của Shell.
 
@@ -34,6 +34,9 @@
 - **Không dùng `ExpandedClientAreaHint`** (Qt 6.9+): Qt tự vẽ icon + chữ tiêu đề đè lên vùng tab.
 - Cách dùng: giữ khung native, `WM_NCCALCSIZE` trả 0, nút caption do DWM vẽ (`DwmDefWindowProc`).
 - PyQt6 6.11: `nativeEvent` phải trả `(False, 0)`; trả kết quả của `super()` (`(False, None)`) gây crash.
+- Tín hiệu từ singleton (`theme().changed`) chỉ nối vào **bound method** của QObject, không nối lambda:
+  lambda không tự ngắt khi widget bị hủy → crash khi đổi theme sau khi đóng cửa sổ.
+- Nút Share của Explorer cố ý không làm (cần WinRT share sheet); command bar không có nút giả.
 
 ## Định nghĩa hoàn thành (DoD) cho mỗi giai đoạn
 
