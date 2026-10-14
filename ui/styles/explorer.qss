@@ -8,8 +8,19 @@
    ===================================================================== */
 
 /* ── Panes & splitters ── */
-QMainWindow, #mainCentralWidget {
+QMainWindow {
+    background-color: @bg_chrome;               /* title + address rows without Mica */
+}
+QMainWindow[backdrop="system"] {
+    background: transparent;                     /* Mica Alt / Acrylic shows through */
+}
+#mainCentralWidget {
     background-color: @bg_base;
+}
+/* Address row shares the active tab's layer, as in Explorer */
+QToolBar#addressRow {
+    background-color: @layer_on_mica;
+    padding: 6px 8px;
 }
 QSplitter::handle {
     background-color: @stroke_divider;

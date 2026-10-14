@@ -33,9 +33,11 @@ from ui.widgets.progress_dialog import TaskProgressDialog
 from ui.widgets.quick_look_dialog import QuickLookDialog
 from ui.widgets.command_palette import CommandPaletteDialog, PaletteCommand
 from ui.widgets.svg_icons       import get_svg_icon
-from core.background_manager    import load_appearance_settings, apply_acrylic_blur
+from core.background_manager    import load_appearance_settings
+from ui.widgets.title_bar       import TitleBar
+from ui.win_chrome              import IS_WINDOWS, WindowChrome
 from utils.cuda_helper          import get_cuda_info
-from ui.theme import tok
+from ui.theme import theme, tok
 
 
 class MainWindow(QMainWindow):
@@ -53,10 +55,20 @@ class MainWindow(QMainWindow):
         self._running_threads: set[QThread] = set()
         self._running_workers: set[QObject] = set()
 
+        # Explorer-style chrome: tabs in the title bar over a Mica backdrop (Windows only;
+        # offscreen/tests keep the native title bar)
+        self._chrome: Optional[WindowChrome] = None
+        self._native_chrome = IS_WINDOWS and QApplication.platformName() == "windows"
+        if self._native_chrome:
+            # Keep the native frame (a frameless translucent window would be WS_EX_LAYERED:
+            # click-through transparent pixels, no Mica); WindowChrome removes the caption
+            self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+
         self.bg_layer = BackgroundLayer(self)
         self._apply_stylesheet()
         self._build_toolbar()
         self._build_central_widget()
+        self._build_title_bar()
         self._build_statusbar()
         self._build_menu_actions()
         self._init_quick_look_and_palette()
@@ -195,6 +207,7 @@ class MainWindow(QMainWindow):
 
     def _build_toolbar(self):
         self.toolbar = AppToolBar(self)
+        self.toolbar.setObjectName("addressRow")
         self.addToolBar(self.toolbar)
         self.toolbar.navigate_requested.connect(self._navigate_to)
         self.toolbar.search_requested.connect(self._on_search)
@@ -222,8 +235,8 @@ class MainWindow(QMainWindow):
         browse_layout.setSpacing(0)
 
         # Feature 5: Multi-tab workspace bar (browser-style tabs)
+        # Tabs live in the title bar (see _build_title_bar), like Explorer
         self.workspace_tabs = WorkspaceTabBar(self)
-        browse_layout.addWidget(self.workspace_tabs)
 
         self.h_splitter = QSplitter(Qt.Orientation.Horizontal)
         self.h_splitter.setChildrenCollapsible(False)
@@ -971,6 +984,58 @@ class MainWindow(QMainWindow):
         dlg = LogcatDialog(self)
         dlg.exec()
 
+    # ─────────────────────────────────────────────
+    # Window chrome (title bar, Mica, Snap Layouts)
+    # ─────────────────────────────────────────────
+
+    def _build_title_bar(self):
+        from ui.widgets.workspace_tabs import WorkspaceTabButton
+        self.title_bar = TitleBar(self, self.workspace_tabs)
+        self.setMenuWidget(self.title_bar)
+        # Tabs and their buttons keep their clicks; everything else in the bar drags the window
+        self._is_title_interactive = lambda w: isinstance(w, (QToolButton, WorkspaceTabButton))
+        theme().changed.connect(lambda *_: self._apply_backdrop())
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self._native_chrome and self._chrome is None:
+            self._chrome = WindowChrome(self, self.title_bar, is_interactive=self._is_title_interactive)
+            if not self._chrome.install(dark=theme().is_dark, backdrop=self._backdrop_kind):
+                self._chrome = None   # native title bar stays; tabs sit in our bar below it
+            self._apply_backdrop()
+            self._sync_caption_space()
+            QTimer.singleShot(250, self._sync_caption_space)
+
+    def _sync_caption_space(self):
+        if getattr(self, "_chrome", None) is not None:
+            self.title_bar.set_caption_width(self._chrome.caption_buttons_width())
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        # Caption buttons change width between normal / maximized and across DPI changes
+        if event.type() in (event.Type.WindowStateChange, event.Type.DevicePixelRatioChange):
+            QTimer.singleShot(0, self._sync_caption_space)
+            QTimer.singleShot(150, self._sync_caption_space)   # DWM may update bounds later
+
+    def nativeEvent(self, event_type, message):
+        if self._chrome is not None and event_type == b"windows_generic_MSG":
+            handled, result = self._chrome.native_event(message)
+            if handled:
+                return True, result
+        # Not super(): PyQt6 6.11 returns (False, None) from it and handing that back
+        # to Qt crashes (access violation). QWidget::nativeEvent only returns false.
+        return False, 0
+
+    def _apply_backdrop(self):
+        kind = getattr(self, "_backdrop_kind", "tabbed")
+        shows_backdrop = False
+        if self._chrome is not None:
+            shows_backdrop = self._chrome.set_backdrop(kind, theme().is_dark) and kind != "none"
+        # Transparent window background only where the system draws a backdrop
+        self.setProperty("backdrop", "system" if shows_backdrop else "solid")
+        self.style().unpolish(self)
+        self.style().polish(self)
+
     def closeEvent(self, event):
         """Safely terminate all background worker threads and persist UI state before closing."""
         from core.app_logcat import logcat
@@ -1023,6 +1088,8 @@ class MainWindow(QMainWindow):
         if hasattr(self, "bg_layer"):
             self.bg_layer.setGeometry(self.rect())
             self.bg_layer.lower()
+        # DWM settles the caption-button size only after the first layout / DPI pass
+        self._sync_caption_space()
 
     def _apply_appearance_settings(self):
         cfg = load_appearance_settings()
@@ -1039,13 +1106,9 @@ class MainWindow(QMainWindow):
             self.bg_layer.setGeometry(self.rect())
             self.bg_layer.lower()
 
-        # 2. Windows Acrylic blur
-        try:
-            hwnd = int(self.winId()) if hasattr(self, "winId") else 0
-            if hwnd:
-                apply_acrylic_blur(hwnd, enable=(mode == "blur"), blur_opacity=blur_opacity)
-        except Exception:
-            pass
+        # 2. System backdrop: Mica Alt (default) / Acrylic (blur) / none (custom wallpaper)
+        self._backdrop_kind = {"blur": "acrylic", "custom": "none"}.get(mode, "tabbed")
+        self._apply_backdrop()
 
         # 3. Dynamic styling for glassmorphism / wallpaper mode
         # Base Explorer stylesheet lives at app level (ui.theme); only overlays go here

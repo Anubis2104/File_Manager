@@ -41,6 +41,9 @@ class Tokens:
     fill_hover: str         # subtle hover on list items / toolbar buttons
     fill_pressed: str
     fill_selected: str      # selected item (navigation pane, lists)
+    # Translucent layers over the Mica backdrop (#AARRGGBB, Qt order)
+    layer_on_mica: str      # active tab + address row (Fluent LayerOnMicaBaseAlt)
+    hover_on_mica: str      # hover on inactive tabs / caption buttons
     # Strokes
     stroke_divider: str     # pane separators, column dividers
     stroke_control: str     # control borders, card outlines
@@ -65,6 +68,7 @@ DARK = Tokens(
     name="dark",
     bg_base="#191919", bg_layer="#1c1c1c", bg_card="#222222", bg_chrome="#202020",
     fill_control="#2b2b2b", fill_hover="#2d2d2d", fill_pressed="#292929", fill_selected="#333333",
+    layer_on_mica="#733a3a3a", hover_on_mica="#0fffffff",
     stroke_divider="#2b2b2b", stroke_control="#383838",
     text_primary="#ffffff", text_secondary="#dedede", text_tertiary="#9a9a9a", text_disabled="#5d5d5d",
     accent="#60cdff", text_on_accent="#000000",
@@ -76,6 +80,7 @@ LIGHT = Tokens(
     name="light",
     bg_base="#ffffff", bg_layer="#f9f9f9", bg_card="#f3f3f3", bg_chrome="#f3f3f3",
     fill_control="#ffffff", fill_hover="#f5f5f5", fill_pressed="#f0f0f0", fill_selected="#e5e5e5",
+    layer_on_mica="#b3ffffff", hover_on_mica="#09000000",
     stroke_divider="#e5e5e5", stroke_control="#d1d1d1",
     text_primary="#1a1a1a", text_secondary="#5d5d5d", text_tertiary="#8a8a8a", text_disabled="#a0a0a0",
     accent="#005fb8", text_on_accent="#ffffff",

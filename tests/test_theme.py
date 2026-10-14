@@ -20,6 +20,7 @@ from ui import theme as th  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 HEX = re.compile(r"^#[0-9a-f]{6}$")
+HEX_ALPHA = re.compile(r"^#[0-9a-f]{8}$")   # #AARRGGBB layers over Mica
 
 
 @pytest.fixture(scope="module")
@@ -54,7 +55,8 @@ def contrast(a: str, b: str) -> float:
 def test_every_token_is_a_hex_color(tokens):
     for f in fields(th.Tokens):
         if f.name != "name":
-            assert HEX.match(getattr(tokens, f.name)), f"{tokens.name}.{f.name}"
+            pattern = HEX_ALPHA if f.name.endswith("_on_mica") else HEX
+            assert pattern.match(getattr(tokens, f.name)), f"{tokens.name}.{f.name}"
 
 
 @pytest.mark.parametrize("tokens", [th.DARK, th.LIGHT], ids=["dark", "light"])
