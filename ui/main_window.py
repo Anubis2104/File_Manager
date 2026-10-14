@@ -995,7 +995,9 @@ class MainWindow(QMainWindow):
         self.setMenuWidget(self.title_bar)
         # Tabs and their buttons keep their clicks; everything else in the bar drags the window
         self._is_title_interactive = lambda w: isinstance(w, (QToolButton, WorkspaceTabButton))
-        theme().changed.connect(lambda *_: self._apply_backdrop())
+        # Bound method, not a lambda: PyQt drops the connection when this window is
+        # destroyed, so a later theme switch never calls into a deleted window.
+        theme().changed.connect(self._on_theme_changed)
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -1026,6 +1028,9 @@ class MainWindow(QMainWindow):
         # Not super(): PyQt6 6.11 returns (False, None) from it and handing that back
         # to Qt crashes (access violation). QWidget::nativeEvent only returns false.
         return False, 0
+
+    def _on_theme_changed(self, _tokens=None):
+        self._apply_backdrop()
 
     def _apply_backdrop(self):
         kind = getattr(self, "_backdrop_kind", "tabbed")

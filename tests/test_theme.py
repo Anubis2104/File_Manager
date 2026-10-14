@@ -125,6 +125,35 @@ def test_settings_dialog_saves_and_applies_theme(manager, monkeypatch):
     assert manager.mode == "light" and not manager.is_dark
 
 
+def test_theme_switch_after_window_destroyed_does_not_crash():
+    """Theme signals once reached deleted windows through lambdas (access violation).
+    Run in a subprocess: a native crash would otherwise take the whole test run down."""
+    import subprocess
+    import textwrap
+    script = textwrap.dedent(f"""
+        import os, sys
+        os.environ["QT_QPA_PLATFORM"] = "offscreen"
+        sys.path.insert(0, {str(ROOT)!r})
+        from PyQt6.QtCore import QCoreApplication, QEvent
+        from PyQt6.QtWidgets import QApplication
+        app = QApplication(sys.argv)
+        from ui.theme import theme
+        theme().install(app, mode="dark")
+        from ui.main_window import MainWindow
+        for _ in range(2):
+            w = MainWindow(); w.closeEvent = lambda e: e.accept(); w.show(); app.processEvents()
+            w.deleteLater(); del w
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete.value)
+            app.processEvents()
+        for mode in ("light", "dark", "light"):
+            theme().set_mode(mode); app.processEvents()
+        print("SURVIVED", flush=True)
+    """)
+    proc = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True,
+                          encoding="utf-8", errors="replace", timeout=120, cwd=str(ROOT))
+    assert proc.returncode == 0 and "SURVIVED" in proc.stdout, proc.stderr[-1500:]
+
+
 def test_no_raw_palette_colors_left_in_ui():
     """Neutral/accent colors of the old navy theme must go through tokens."""
     old_palette = {"#0b0f19", "#111827", "#1e293b", "#334155", "#38bdf8", "#0a84ff", "#1c1c1e",
