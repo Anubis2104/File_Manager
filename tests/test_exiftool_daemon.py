@@ -113,6 +113,57 @@ def test_real_exiftool_daemon_reads_unicode_filename(tmp_path):
         assert data.get("File:ImageWidth") == 32
 
 
+def _pid_alive(pid: int) -> bool:
+    import ctypes
+    from ctypes import wintypes
+    k32 = ctypes.windll.kernel32
+    k32.OpenProcess.restype = wintypes.HANDLE
+    h = k32.OpenProcess(0x1000, False, pid)          # PROCESS_QUERY_LIMITED_INFORMATION
+    if not h:
+        return False
+    try:
+        code = ctypes.c_ulong()
+        k32.GetExitCodeProcess(wintypes.HANDLE(h), ctypes.byref(code))
+        return code.value == 259                       # STILL_ACTIVE
+    finally:
+        k32.CloseHandle(wintypes.HANDLE(h))
+
+
+@pytest.mark.skipif(sys.platform != "win32" or not REAL_EXIFTOOL.exists(), reason="Windows + bundled ExifTool.exe")
+@pytest.mark.parametrize("exit_how", ["normal", "hard"])
+def test_daemon_process_does_not_outlive_python(tmp_path, exit_how):
+    """The shared stay_open daemon used to survive the app: one orphan ExifTool.exe per run."""
+    import subprocess
+    import textwrap
+    from PIL import Image
+
+    img = tmp_path / "x.jpg"
+    Image.new("RGB", (8, 8)).save(img)
+    script = textwrap.dedent(f"""
+        import os, sys
+        sys.path.insert(0, {str(PROJECT_ROOT)!r})
+        from pathlib import Path
+        from core.metadata import _get_global_daemon
+        d = _get_global_daemon({str(REAL_EXIFTOOL)!r})
+        assert d.read_json(Path({str(img)!r}))
+        print("PID", d._proc.pid, flush=True)
+        if {exit_how!r} == "hard":
+            os._exit(0)        # no atexit, no finalizers: like a crash
+    """)
+    proc = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=60)
+    line = next((l for l in proc.stdout.splitlines() if l.startswith("PID ")), None)
+    assert line, proc.stderr[-1500:]
+    pid = int(line.split()[1])
+
+    deadline = time.monotonic() + 5
+    while _pid_alive(pid) and time.monotonic() < deadline:
+        time.sleep(0.1)
+    alive = _pid_alive(pid)
+    if alive:                                          # never leave the orphan behind
+        subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], capture_output=True)
+    assert not alive, f"ExifTool daemon (pid {pid}) outlived its Python process ({exit_how} exit)"
+
+
 def test_resolve_exiftool_falls_back_to_path_lookup(monkeypatch):
     """No candidate binary works → must consult PATH, not crash with NameError (missing import)."""
     import utils.date_utils as du
