@@ -240,8 +240,16 @@ class PHashEngine:
                     dct_low = dct[:HASH_SIZE, :HASH_SIZE]
                     median = np.median(dct_low.flatten()[1:])
                     results[p] = (dct_low.flatten() > median)
-                except Exception:
-                    pass
+                except Exception as _exc:
+                    try:
+                        from core.app_logcat import logcat
+                        logcat.w("pHash", f"Bỏ qua {p.name} (CPU DCT lỗi): {_exc}")
+                    except Exception as _bare_exc:
+                        try:
+                            from core.app_logcat import logcat
+                            logcat.w("PHASH_ENGINE", f"Loi im lang [duplicate/phash_engine.py:247]: {_bare_exc}")
+                        except Exception:
+                            pass
 
             if cancel_check and cancel_check():
                 break

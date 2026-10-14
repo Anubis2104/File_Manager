@@ -33,7 +33,10 @@ try:
     import cv2
     # Suppress C-level FFmpeg/OpenCV log spam
     try:
-        cv2.setLogLevel(0)
+        if hasattr(cv2, "utils") and hasattr(cv2.utils, "logging"):
+            cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_SILENT)
+        elif hasattr(cv2, "setLogLevel"):
+            cv2.setLogLevel(0)
     except Exception:
         pass
     HAS_CV2 = True
@@ -169,8 +172,12 @@ class MediaExtractor:
                                     interpolation=cv2.INTER_AREA,
                                 )
                                 return cls._to_tensor(resized.astype(np.float32) / 255.0)
-                except Exception:
-                    pass
+                except Exception as _bare_exc:
+                    try:
+                        from core.app_logcat import logcat
+                        logcat.w("MEDIA_EXTRAC", f"Loi im lang [utils/media_extractor.py:176]: {_bare_exc}")
+                    except Exception:
+                        pass
 
                 # Slow path: full demosaic
                 rgb = raw.postprocess(
@@ -290,8 +297,12 @@ class MediaExtractor:
                 with Image.open(path) as img:
                     img = ImageOps.exif_transpose(img)
                     width, height = img.size
-            except Exception:
-                pass
+            except Exception as _bare_exc:
+                try:
+                    from core.app_logcat import logcat
+                    logcat.w("MEDIA_EXTRAC", f"Loi im lang [utils/media_extractor.py:297]: {_bare_exc}")
+                except Exception:
+                    pass
 
         # Date resolution — prefer EXIF, fall back to filesystem timestamps
         raw_date = (

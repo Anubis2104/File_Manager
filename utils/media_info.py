@@ -50,8 +50,12 @@ def get_image_dimensions(path: Path) -> Optional[MediaDimensions]:
                         # 5,6,7,8 mean image is rotated 90/270 deg
                         if orient_val in (5, 6, 7, 8):
                             w, h = h, w
-            except Exception:
-                pass
+            except Exception as _bare_exc:
+                try:
+                    from core.app_logcat import logcat
+                    logcat.w("MEDIA_INFO", f"Loi im lang [utils/media_info.py:53]: {_bare_exc}")
+                except Exception:
+                    pass
             orientation = "H" if w >= h else "V"
             return MediaDimensions(w, h, orientation, 0.0, "image")
     except Exception:

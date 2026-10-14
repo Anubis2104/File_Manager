@@ -155,8 +155,12 @@ class RenameWorker(QObject):
                 if self.logger:
                     try:
                         self.logger.log_rename_op(op)
-                    except Exception:
-                        pass
+                    except Exception as _bare_exc:
+                        try:
+                            from core.app_logcat import logcat
+                            logcat.w("WORKERS", f"Bỏ qua lỗi [core/workers.py:158]: {_bare_exc}")
+                        except Exception:
+                            pass
                 if self.is_cancelled:
                     self.cancelled.emit()
                     return

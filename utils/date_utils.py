@@ -131,8 +131,12 @@ def run_exiftool_utf8(
         if os.path.exists(tmp_name):
             try:
                 os.remove(tmp_name)
-            except Exception:
-                pass
+            except Exception as _bare_exc:
+                try:
+                    from core.app_logcat import logcat
+                    logcat.w("DATE_UTILS", f"Khong xoa temp argfile: {_bare_exc}")
+                except Exception:
+                    pass
 
 
 def get_date_from_exiftool(path: Path, exiftool_exe: str = "exiftool") -> Optional[datetime]:
@@ -199,8 +203,12 @@ def get_date_from_pillow(path: Path) -> Optional[datetime]:
                     dt = parse_exif_date(val)
                     if dt and dt.year > 1970:
                         return dt
-    except Exception:
-        pass
+    except Exception as _bare_exc:
+        try:
+            from core.app_logcat import logcat
+            logcat.w("DATE_UTILS", f"Loi im lang [utils/date_utils.py:206]: {_bare_exc}")
+        except Exception:
+            pass
     return None
 
 
@@ -216,10 +224,18 @@ def get_date_from_mutagen(path: Path) -> Optional[datetime]:
                     val_clean = val.replace("Z", "").replace("T", " ")[:19]
                     try:
                         return datetime.fromisoformat(val_clean)
-                    except Exception:
-                        pass
-    except Exception:
-        pass
+                    except Exception as _bare_exc:
+                        try:
+                            from core.app_logcat import logcat
+                            logcat.w("DATE_UTILS", f"Loi im lang [utils/date_utils.py:223]: {_bare_exc}")
+                        except Exception:
+                            pass
+    except Exception as _bare_exc:
+        try:
+            from core.app_logcat import logcat
+            logcat.w("DATE_UTILS", f"Loi im lang [utils/date_utils.py:225]: {_bare_exc}")
+        except Exception:
+            pass
     return None
 
 
@@ -280,8 +296,12 @@ def extract_best_date(
         mtime = datetime.fromtimestamp(path.stat().st_mtime)
         if mtime and mtime.year > 1970:
             return mtime, "mtime"
-    except Exception:
-        pass
+    except Exception as _bare_exc:
+        try:
+            from core.app_logcat import logcat
+            logcat.w("DATE_UTILS", f"Loi im lang [utils/date_utils.py:287]: {_bare_exc}")
+        except Exception:
+            pass
 
     return None, "unknown"
 

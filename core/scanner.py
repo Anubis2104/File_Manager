@@ -161,8 +161,12 @@ class DirectoryScanner:
                     try:
                         from core.app_logcat import logcat
                         logcat.w("Scanner", f"scan_paths: lỗi xử lý {src_path.name}: {exc}")
-                    except Exception:
-                        pass
+                    except Exception as _bare_exc:
+                        try:
+                            from core.app_logcat import logcat
+                            logcat.w("SCANNER", f"Bỏ qua lỗi [core/scanner.py:164]: {_bare_exc}")
+                        except Exception:
+                            pass
                     if on_error:
                         on_error(src_path, exc)
         # Preserve original path ordering

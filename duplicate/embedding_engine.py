@@ -297,8 +297,12 @@ class EmbeddingEngine:
                         if max(img.size) > 1024:
                             img.thumbnail((512, 512), PILImage.Resampling.BILINEAR)
                         return self._transform(img)
-            except Exception:
-                pass
+            except Exception as _bare_exc:
+                try:
+                    from core.app_logcat import logcat
+                    logcat.w("EMBEDDING_EN", f"Loi im lang [duplicate/embedding_engine.py:300]: {_bare_exc}")
+                except Exception:
+                    pass
 
             # Fallback 2: RAW camera formats via rawpy
             try:

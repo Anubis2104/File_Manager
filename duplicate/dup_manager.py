@@ -44,7 +44,7 @@ class DupManager:
 
     def __init__(
         self,
-        phash_threshold: int = 10,
+        phash_threshold: int = 5,
         embedding_threshold: float = 0.95,
         model_name: str = "dinov2_vits14",
         batch_size: int = 32,
@@ -258,14 +258,22 @@ def _safe_stat(path: Path) -> dict:
         with Image.open(path) as img:
             result["width"], result["height"] = img.size
             return result
-    except Exception:
-        pass
+    except Exception as _bare_exc:
+        try:
+            from core.app_logcat import logcat
+            logcat.w("DUP_MANAGER", f"Loi im lang [duplicate/dup_manager.py:261]: {_bare_exc}")
+        except Exception:
+            pass
     try:
         import rawpy
         with rawpy.imread(str(path)) as raw:
             result["width"], result["height"] = raw.sizes.width, raw.sizes.height
-    except Exception:
-        pass
+    except Exception as _bare_exc:
+        try:
+            from core.app_logcat import logcat
+            logcat.w("DUP_MANAGER", f"Loi im lang [duplicate/dup_manager.py:271]: {_bare_exc}")
+        except Exception:
+            pass
     return result
 
 

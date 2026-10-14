@@ -94,8 +94,12 @@ class ImageConverter:
                         exif_data = img.info.get("exif")
                         if exif_data and pil_format in ("JPEG", "WEBP", "PNG"):
                             save_kwargs["exif"] = exif_data
-                    except Exception:
-                        pass
+                    except Exception as _bare_exc:
+                        try:
+                            from core.app_logcat import logcat
+                            logcat.w("CONVERTER", f"Bỏ qua lỗi [core/converter.py:97]: {_bare_exc}")
+                        except Exception:
+                            pass
 
                 img.save(dst, format=pil_format, **save_kwargs)
             return True, ""

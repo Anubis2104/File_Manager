@@ -195,8 +195,12 @@ def inspect_file(filepath: Path | str) -> Dict[str, Any]:
                     "threat_type": "SCRIPT_INJECTION",
                 })
                 return res
-        except Exception:
-            pass
+        except Exception as _bare_exc:
+            try:
+                from core.app_logcat import logcat
+                logcat.w("INSPECTOR", f"Bỏ qua lỗi [core/inspector.py:198]: {_bare_exc}")
+            except Exception:
+                pass
 
     # Layer 4: Structural Integrity & Trailing Overlay Check
     # 4.1 JPEG
@@ -357,8 +361,12 @@ def inspect_file(filepath: Path | str) -> Dict[str, Any]:
                         "can_trim": True,
                     })
                     return res
-            except Exception:
-                pass
+            except Exception as _bare_exc:
+                try:
+                    from core.app_logcat import logcat
+                    logcat.w("INSPECTOR", f"Loi im lang [core/inspector.py:364]: {_bare_exc}")
+                except Exception:
+                    pass
 
     return res
 
