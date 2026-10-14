@@ -1,6 +1,6 @@
 # Kế hoạch: Giao diện giống Windows 11 File Explorer
 
-> Trạng thái: **Chờ duyệt Gate 1** · Lập ngày 2026-10-14
+> Trạng thái: Gate 1 đã duyệt (2026-10-14) · **GĐ 0–1 xong** (2026-10-15) · tiếp theo: GĐ 2–3
 > Quyết định đã chốt (/grill-me): giống tối đa nhưng giữ tính năng riêng · theme theo hệ thống (sáng/tối + accent) ·
 > tính năng riêng đặt trên command bar + menu ⋯ · menu chuột phải kiểu Win11 + "Show more options" gốc của Shell.
 
@@ -26,6 +26,14 @@
 | 7 | **Thanh trạng thái + khung chi tiết** | "N mục · M đã chọn · dung lượng" + nút chuyển Details/Icons; khung Preview/Details bật tắt như Explorer | Thấp |
 | 8 | **Trang Trùng lặp / Kiểm định** | Bỏ 3 tab lớn; mở như một "trang" trong vùng nội dung (giống Home/Gallery), restyle theo token | Trung bình |
 | 9 | **Hoàn thiện** | Segoe Fluent Icons, hiệu ứng hover/chọn, phím tắt giống Explorer (F2, Del, Ctrl+Shift+N, Alt+Enter mở Properties gốc), kiểm tra a11y/tương phản | Thấp |
+
+## Ghi chú kỹ thuật đã kiểm chứng (GĐ 1)
+
+- **Không dùng `FramelessWindowHint`**: frameless + `WA_TranslucentBackground` khiến Qt tạo cửa sổ
+  `WS_EX_LAYERED`, pixel trong suốt bị xuyên chuột, không có Mica, không có nút DWM.
+- **Không dùng `ExpandedClientAreaHint`** (Qt 6.9+): Qt tự vẽ icon + chữ tiêu đề đè lên vùng tab.
+- Cách dùng: giữ khung native, `WM_NCCALCSIZE` trả 0, nút caption do DWM vẽ (`DwmDefWindowProc`).
+- PyQt6 6.11: `nativeEvent` phải trả `(False, 0)`; trả kết quả của `super()` (`(False, None)`) gây crash.
 
 ## Định nghĩa hoàn thành (DoD) cho mỗi giai đoạn
 
