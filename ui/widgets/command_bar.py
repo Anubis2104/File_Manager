@@ -84,6 +84,9 @@ class CommandBar(QToolBar):
         self.act_new_folder = new_menu.addAction("Thư mục")
         self.act_new_folder.setShortcutVisibleInContextMenu(True)
         self.act_new_folder.setShortcut("Ctrl+Shift+N")
+        # Shown in the menu only: MainWindow owns the real shortcut, and two registrations
+        # of one key make Qt treat it as ambiguous and fire neither.
+        self.act_new_folder.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)
         self.act_new_folder.triggered.connect(self.new_folder_requested.emit)
         self.btn_new = self._button("new", "Mới", "Tạo mục mới", menu=new_menu)
         self.addSeparator()
@@ -120,16 +123,23 @@ class CommandBar(QToolBar):
         self.act_ascending.setChecked(True)
         self.btn_sort = self._button("sort", "Sắp xếp", "Sắp xếp các mục", menu=self.sort_menu)
 
-        # View ▾
+        # View ▾ — Explorer's eight layouts, with its Ctrl+Shift+1..8 shortcuts shown
+        from ui.panels.explorer_delegate import VIEW_ORDER, VIEW_SPECS
         self.view_menu = QMenu(self)
         view_group = QActionGroup(self)
-        self.act_view_grid = self.view_menu.addAction("Biểu tượng lớn")
-        self.act_view_detail = self.view_menu.addAction("Chi tiết")
-        for act, mode in ((self.act_view_grid, "grid"), (self.act_view_detail, "detail")):
+        self.view_actions: dict[str, QAction] = {}
+        for n, mode in enumerate(VIEW_ORDER, start=1):
+            act = self.view_menu.addAction(VIEW_SPECS[mode].label)
             act.setCheckable(True)
+            act.setShortcut(f"Ctrl+Shift+{n}")
+            act.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)   # display only (see New)
+            act.setShortcutVisibleInContextMenu(True)
             view_group.addAction(act)
             act.triggered.connect(lambda _=False, m=mode: self.view_requested.emit(m))
-        self.act_view_grid.setChecked(True)
+            self.view_actions[mode] = act
+        self.act_view_grid = self.view_actions["large"]       # names used by older callers
+        self.act_view_detail = self.view_actions["detail"]
+        self.act_view_detail.setChecked(True)
         self.view_menu.addSeparator()
         self.act_details_pane = self.view_menu.addAction("Khung chi tiết")
         self.act_details_pane.setCheckable(True)
@@ -208,7 +218,9 @@ class CommandBar(QToolBar):
         self.btn_paste.setEnabled(can_paste)
 
     def set_view_mode(self, mode: str) -> None:
-        (self.act_view_detail if mode == "detail" else self.act_view_grid).setChecked(True)
+        act = self.view_actions.get("large" if mode == "grid" else mode)
+        if act is not None:
+            act.setChecked(True)
 
     def _set_sort(self, column: Optional[int] = None, order=None) -> None:
         if column is not None:

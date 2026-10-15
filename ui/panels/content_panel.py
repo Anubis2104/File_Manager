@@ -27,8 +27,28 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.widgets.svg_icons import get_svg_icon, get_svg_pixmap
-from ui.panels.media_card_delegate import MediaCardDelegate
+from ui.explorer_model import COL_DATE, COL_NAME, COL_SIZE, COL_TYPE, ExplorerFileSystemModel
+from ui.panels.explorer_delegate import VIEW_ORDER, VIEW_SPECS, ExplorerItemDelegate
+from ui.thumbnails import ThumbnailCache
 from ui.theme import style, tok
+
+# Ctrl + mouse wheel steps through these, like Explorer
+ZOOM_ORDER = ["detail", "list", "small", "medium", "large", "xl"]
+
+
+def default_view_for(path: Path) -> str:
+    """Explorer's folder templates: Pictures / Videos open in Large icons, the rest in Details."""
+    from PyQt6.QtCore import QStandardPaths
+    L = QStandardPaths.StandardLocation
+    for loc in (L.PicturesLocation, L.MoviesLocation):
+        base = QStandardPaths.writableLocation(loc)
+        if base:
+            try:
+                Path(path).resolve().relative_to(Path(base).resolve())
+                return "large"
+            except ValueError:
+                pass
+    return "detail"
 
 
 class EmptyDropzoneWidget(QWidget):
@@ -153,12 +173,14 @@ class ContentPanel(QWidget):
     create_folder_requested= pyqtSignal(Path)              # Target parent dir
     browse_folder_requested= pyqtSignal()
     files_dropped          = pyqtSignal(list, Path)        # (src_paths, dest_dir)
-    view_mode_changed      = pyqtSignal(str)               # 'grid' | 'detail'
+    view_mode_changed      = pyqtSignal(str)               # a VIEW_SPECS key ('detail', 'large', ...)
+    item_count_changed     = pyqtSignal(int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.current_dir: Optional[Path] = None
-        self._current_view_mode: str = "grid"
+        self._current_view_mode: str = "detail"
+        self._folder_views: dict[str, str] = {}       # per-folder view, remembered like Explorer
         self._is_empty: bool = False
         self.setAcceptDrops(True)
         self._build_ui()
@@ -168,51 +190,11 @@ class ContentPanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # ── View mode toolbar ──
-        bar = QHBoxLayout()
-        bar.setContentsMargins(10, 5, 10, 5)
-
-        self.lbl_count = QLabel("0 mục")
-        style(self.lbl_count, "color: @text_secondary; font-size: 8.5pt; font-weight: 500;")
-        bar.addWidget(self.lbl_count)
-        bar.addStretch()
-
-        # Vector SVG toggle buttons
-        btn_grid = QToolButton()
-        btn_grid.setIcon(get_svg_icon("grid", tok("text_secondary"), 16, tok("accent")))
-        btn_grid.setToolTip("Chế độ Lưới (Card View)")
-        btn_grid.setCheckable(True)
-        btn_grid.setChecked(True)
-        btn_grid.setObjectName("viewToggle")
-        btn_grid.clicked.connect(lambda: self._set_view("grid"))
-
-        btn_list = QToolButton()
-        btn_list.setIcon(get_svg_icon("list", tok("text_secondary"), 16, tok("accent")))
-        btn_list.setToolTip("Chế độ Chi tiết (Detail View)")
-        btn_list.setCheckable(True)
-        btn_list.setObjectName("viewToggle")
-        btn_list.clicked.connect(lambda: self._set_view("detail"))
-
-        for btn in (btn_grid, btn_list):
-            style(btn, 
-                "QToolButton { background: transparent; border: 1px solid transparent; border-radius: 5px; "
-                "padding: 4px 8px; } "
-                "QToolButton:checked { background: @fill_hover; border-color: @accent; } "
-                "QToolButton:hover { background: @fill_hover; }"
-            )
-            bar.addWidget(btn)
-        self._view_btns = (btn_grid, btn_list)
-
-        bar_widget = QWidget()
-        bar_widget.setLayout(bar)
-        style(bar_widget, "background: @bg_layer; border-bottom: 1px solid @stroke_divider;")
-        layout.addWidget(bar_widget)
-
         # ── Stacked views ──
         self.stack = QStackedWidget()
 
         # Model setup
-        self.model = QFileSystemModel()
+        self.model = ExplorerFileSystemModel()
         self.model.setFilter(
             QDir.Filter.Files | QDir.Filter.AllDirs | QDir.Filter.NoDotAndDotDot
         )
@@ -220,12 +202,11 @@ class ContentPanel(QWidget):
         # ── Page 0: Grid / Media Card View ──
         self.grid_view = QListView()
         self.grid_view.setModel(self.model)
-        self.grid_view.setViewMode(QListView.ViewMode.IconMode)
-        self.grid_view.setGridSize(QSize(120, 130))
         self.grid_view.setResizeMode(QListView.ResizeMode.Adjust)
-        self.grid_view.setSpacing(10)
         self.grid_view.setUniformItemSizes(True)
         self.grid_view.setMovement(QListView.Movement.Static)
+        self.grid_view.setMouseTracking(True)                      # hover highlight
+        self.grid_view.setFrameShape(QFrame.Shape.NoFrame)
         self.grid_view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.grid_view.setDragEnabled(True)
         self.grid_view.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
@@ -237,9 +218,9 @@ class ContentPanel(QWidget):
         if self.grid_view.selectionModel():
             self.grid_view.selectionModel().selectionChanged.connect(self._on_selection_changed)
 
-        # Custom Media Card Delegate
-        self.media_card_delegate = MediaCardDelegate(self.model, self.grid_view)
-        self.grid_view.setItemDelegate(self.media_card_delegate)
+        # Explorer item painting (icons / list / tiles / content) with Shell thumbnails
+        self.item_delegate = ExplorerItemDelegate(self.grid_view)
+        self.grid_view.setItemDelegate(self.item_delegate)
 
         # ── Page 1: Detail / Table View ──
         self.detail_view = QTableView()
@@ -249,9 +230,25 @@ class ContentPanel(QWidget):
         self.detail_view.setDragEnabled(True)
         self.detail_view.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
         self.detail_view.verticalHeader().setVisible(False)
-        self.detail_view.horizontalHeader().setStretchLastSection(True)
+        self.detail_view.verticalHeader().setDefaultSectionSize(24)  # Explorer row: 30 physical px at 125%
         self.detail_view.setShowGrid(False)
         self.detail_view.setAlternatingRowColors(False)
+        self.detail_view.setWordWrap(False)
+        self.detail_view.setIconSize(QSize(16, 16))
+        self.detail_view.setMouseTracking(True)
+        self.detail_view.setFrameShape(QFrame.Shape.NoFrame)
+        self.detail_view.setSortingEnabled(True)
+        self.detail_view.sortByColumn(COL_NAME, Qt.SortOrder.AscendingOrder)
+        header = self.detail_view.horizontalHeader()
+        header.setHighlightSections(False)
+        header.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        header.setStretchLastSection(False)
+        # Explorer column order: Name | Date modified | Type | Size
+        header.moveSection(header.visualIndex(COL_DATE), 1)
+        header.moveSection(header.visualIndex(COL_TYPE), 2)
+        header.moveSection(header.visualIndex(COL_SIZE), 3)
+        for col, width in ((COL_NAME, 320), (COL_DATE, 150), (COL_TYPE, 130), (COL_SIZE, 90)):
+            header.resizeSection(col, width)
         self.detail_view.clicked.connect(self._on_item_clicked)
         self.detail_view.doubleClicked.connect(self._on_item_activated)
         self.detail_view.activated.connect(self._on_item_activated)
@@ -276,6 +273,9 @@ class ContentPanel(QWidget):
         # Install event filters for Spacebar QuickLook
         self.grid_view.installEventFilter(self)
         self.detail_view.installEventFilter(self)
+        self.grid_view.viewport().installEventFilter(self)       # Ctrl + wheel zoom
+        self.detail_view.viewport().installEventFilter(self)
+        self._configure_list_view(VIEW_SPECS["large"])
 
         # Wire model signals for instantaneous and accurate directory state
         self.model.directoryLoaded.connect(self._on_directory_loaded)
@@ -287,25 +287,25 @@ class ContentPanel(QWidget):
     # ─────────────────────────────────────────────
 
     def load_directory(self, path: Path):
+        ThumbnailCache.instance().cancel_pending()        # stop fetching thumbnails for the old folder
         self.current_dir = path
         root_index = self.model.setRootPath(str(path))
         self.grid_view.setRootIndex(root_index)
         self.detail_view.setRootIndex(root_index)
+        self._set_view(self._folder_views.get(self._folder_key(path)) or default_view_for(path), remember=False)
 
         # Check if already populated in model cache
         n = self.model.rowCount(root_index)
         if n > 0:
-            self.lbl_count.setText(f"{n} mục")
+            self.item_count_changed.emit(n)
             self._is_empty = False
             self._apply_view_stack()
-        else:
-            self.lbl_count.setText("Đang duyệt thư mục...")
 
     def _on_directory_loaded(self, loaded_path: str):
         if self.current_dir and Path(loaded_path).resolve() == self.current_dir.resolve():
             root_index = self.model.index(loaded_path)
             n = self.model.rowCount(root_index)
-            self.lbl_count.setText(f"{n} mục")
+            self.item_count_changed.emit(n)
             self._is_empty = (n == 0)
             if self._is_empty:
                 self.stack.setCurrentIndex(2)  # Show dropzone
@@ -316,7 +316,7 @@ class ContentPanel(QWidget):
         if self.current_dir:
             root_index = self.model.index(str(self.current_dir))
             n = self.model.rowCount(root_index)
-            self.lbl_count.setText(f"{n} mục")
+            self.item_count_changed.emit(n)
             if n > 0 and self._is_empty:
                 self._is_empty = False
                 self._apply_view_stack()
@@ -326,18 +326,54 @@ class ContentPanel(QWidget):
         self.model.setNameFilters([f"*{query}*"] if query else [])
         self.model.setNameFilterDisables(False)
 
-    def _set_view(self, mode: str):
+    @staticmethod
+    def _folder_key(path: Path) -> str:
+        return os.path.normcase(os.path.normpath(str(path)))
+
+    def _set_view(self, mode: str, remember: bool = True):
+        mode = "large" if mode == "grid" else mode          # old name of the icon view
+        if mode not in VIEW_SPECS:
+            return
         changed = mode != self._current_view_mode
         self._current_view_mode = mode
-        self.view_btns_update(mode)
+        if remember and self.current_dir is not None:
+            self._folder_views[self._folder_key(self.current_dir)] = mode
+        if mode != "detail":
+            self._configure_list_view(VIEW_SPECS[mode])
         if not self._is_empty:
             self._apply_view_stack()
         if changed:
             self.view_mode_changed.emit(mode)
 
     def set_view(self, mode: str):
-        """Public view switch ('grid' | 'detail'), e.g. from the command bar."""
+        """Public view switch: any VIEW_SPECS key ('grid' is accepted for 'large')."""
         self._set_view(mode)
+
+    def _configure_list_view(self, spec):
+        gv = self.grid_view
+        L = QListView
+        if spec.kind in ("icon", "tile"):
+            gv.setViewMode(L.ViewMode.IconMode)
+            gv.setFlow(L.Flow.LeftToRight)
+            gv.setWrapping(True)
+        else:
+            gv.setViewMode(L.ViewMode.ListMode)
+            gv.setFlow(L.Flow.TopToBottom if (spec.flow_down or spec.kind == "content") else L.Flow.LeftToRight)
+            gv.setWrapping(spec.kind == "row")
+        gv.setGridSize(spec.cell if spec.cell is not None else QSize())
+        gv.setSpacing(0)
+        gv.setIconSize(QSize(spec.icon, spec.icon))
+        gv.setMovement(L.Movement.Static)
+        gv.setResizeMode(L.ResizeMode.Adjust)
+        self.item_delegate.set_spec(spec)
+        gv.doItemsLayout()
+        gv.viewport().update()
+
+    def zoom(self, steps: int):
+        """Ctrl + wheel: step through Details, List, Small, Medium, Large, Extra large icons."""
+        cur = self._current_view_mode if self._current_view_mode in ZOOM_ORDER else "large"
+        i = max(0, min(len(ZOOM_ORDER) - 1, ZOOM_ORDER.index(cur) + steps))
+        self.set_view(ZOOM_ORDER[i])
 
     @property
     def view_mode(self) -> str:
@@ -349,12 +385,7 @@ class ContentPanel(QWidget):
         self.detail_view.sortByColumn(column, order)
 
     def _apply_view_stack(self):
-        idx = 0 if self._current_view_mode == "grid" else 1
-        self.stack.setCurrentIndex(idx)
-
-    def view_btns_update(self, active: str):
-        self._view_btns[0].setChecked(active == "grid")
-        self._view_btns[1].setChecked(active == "detail")
+        self.stack.setCurrentIndex(1 if self._current_view_mode == "detail" else 0)
 
     def _on_go_up_clicked(self):
         if self.current_dir:
@@ -430,6 +461,12 @@ class ContentPanel(QWidget):
     # ─────────────────────────────────────────────
 
     def eventFilter(self, obj, event):
+        if (event.type() == QEvent.Type.Wheel and obj in (self.grid_view.viewport(), self.detail_view.viewport())
+                and event.modifiers() & Qt.KeyboardModifier.ControlModifier):
+            delta = event.angleDelta().y()
+            if delta:
+                self.zoom(1 if delta > 0 else -1)
+            return True
         if obj in (self.grid_view, self.detail_view):
             if event.type() == QEvent.Type.KeyPress:
                 key_event: QKeyEvent = event

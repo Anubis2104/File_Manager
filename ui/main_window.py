@@ -179,6 +179,15 @@ class MainWindow(QMainWindow):
         cb.view_requested.connect(self.content_panel.set_view)
         cb.details_toggled.connect(self.right_dock.setVisible)
         self.content_panel.view_mode_changed.connect(cb.set_view_mode)
+        self.content_panel.view_mode_changed.connect(self.app_statusbar.set_view_mode)
+        self.content_panel.item_count_changed.connect(self.app_statusbar.set_item_count)
+        self.app_statusbar.view_requested.connect(self.content_panel.set_view)
+        self.app_statusbar.set_view_mode(self.content_panel.view_mode)
+        # Explorer's Ctrl+Shift+1..8 layout shortcuts (the View menu shows them)
+        from ui.panels.explorer_delegate import VIEW_ORDER
+        from PyQt6.QtGui import QShortcut
+        for n, mode in enumerate(VIEW_ORDER, start=1):
+            QShortcut(QKeySequence(f"Ctrl+Shift+{n}"), self, activated=lambda m=mode: self.content_panel.set_view(m))
         self.content_panel.selection_changed.connect(lambda _paths: self._update_command_state())
         QApplication.clipboard().dataChanged.connect(self._update_command_state)
         self._update_command_state()
