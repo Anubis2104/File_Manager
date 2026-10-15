@@ -76,12 +76,17 @@ def load_settings() -> dict:
     return defaults
 
 
+# Sections this dialog edits; anything else in the file (e.g. Quick access pins under
+# "navigation") belongs to other parts of the app and is left as it is on disk.
+OWNED_SECTIONS = ("rename", "duplicate", "performance", "tools", "appearance", "general")
+
+
 def save_settings(cfg: dict) -> bool:
-    """Save settings dictionary to settings.json."""
+    """Write this dialog's sections to settings.json atomically, keeping all other keys."""
     try:
-        SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(SETTINGS_PATH, "w", encoding="utf-8") as f:
-            json.dump(cfg, f, indent=2, ensure_ascii=False)
+        from utils.settings_store import update_settings
+        update_settings(lambda disk: disk.update({k: cfg[k] for k in OWNED_SECTIONS if k in cfg}),
+                        SETTINGS_PATH)
         return True
     except Exception:
         return False

@@ -408,6 +408,15 @@ class MainWindow(QMainWindow):
         logcat.i("UI:TreeContextMenu", f"Menu chuột phải cây thư mục: {folder_path}")
         menu = QMenu(self)
 
+        # Explorer: "Pin to Quick access" / "Unpin from Quick access"
+        if self.tree_panel.is_pinned(folder_path):
+            act_pin = menu.addAction("Bỏ ghim khỏi Truy cập nhanh")
+            act_pin.triggered.connect(lambda: self.tree_panel.unpin(folder_path))
+        else:
+            act_pin = menu.addAction("Ghim vào Truy cập nhanh")
+            act_pin.triggered.connect(lambda: self.tree_panel.pin(folder_path))
+        menu.addSeparator()
+
         act_rename = menu.addAction(get_svg_icon("rename", tok("accent"), 16), "Đổi tên hàng loạt tệp trong thư mục này... (Ctrl+R)")
         act_rename.triggered.connect(lambda: self._open_rename_dialog(target_folders=[folder_path]))
 

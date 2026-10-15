@@ -69,8 +69,65 @@ def list_drives() -> list[Path]:
     return sorted(set(roots), key=lambda p: str(p).lower())
 
 
-def subfolders(path: Path, limit: int = 400) -> list[Path]:
-    """Non-hidden subfolders of `path`, case-insensitively sorted, for breadcrumb menus."""
+_ADVANCED_KEY = r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
+
+
+def _explorer_advanced(name: str, default: int) -> int:
+    if os.name != "nt":
+        return default
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _ADVANCED_KEY) as k:
+            return int(winreg.QueryValueEx(k, name)[0])
+    except (OSError, ValueError):
+        return default
+
+
+def explorer_shows_hidden() -> bool:
+    """View > Show > Hidden items (Advanced key, value Hidden: 1 = show, 2 = hide)."""
+    return _explorer_advanced("Hidden", 2) == 1
+
+
+def explorer_shows_protected_os_files() -> bool:
+    """'Hide protected operating system files' unchecked (Advanced key, ShowSuperHidden = 1)."""
+    return _explorer_advanced("ShowSuperHidden", 0) == 1
+
+
+def explorer_hides_extensions() -> bool:
+    """'Hide extensions for known file types' (Advanced key, HideFileExt = 1, the default)."""
+    return _explorer_advanced("HideFileExt", 1) == 1
+
+
+def explorer_expands_to_current_folder() -> bool:
+    """Navigation pane > 'Expand to open folder' (off by default on Windows 11)."""
+    return _explorer_advanced("NavPaneExpandToCurrentFolder", 0) == 1
+
+
+def _visible(entry: os.DirEntry, show_hidden: bool, show_protected: bool) -> bool:
+    """Explorer's rules: Hidden needs 'show hidden items'; Hidden+System (protected OS
+    files such as the 'My Documents' / 'Cookies' junctions) also needs ShowSuperHidden."""
+    if os.name != "nt":
+        return show_hidden or not entry.name.startswith(".")
+    attrs = entry.stat(follow_symlinks=False).st_file_attributes
+    hidden, system = bool(attrs & 0x2), bool(attrs & 0x4)
+    if hidden and system:
+        return show_hidden and show_protected
+    if hidden:
+        return show_hidden
+    return True
+
+
+def subfolders(path: Path, limit: int = 400, show_hidden: Optional[bool] = None,
+               show_protected: Optional[bool] = None) -> list[Path]:
+    """
+    Subfolders of `path` as Explorer lists them, case-insensitively sorted.
+    On Windows a leading dot does not hide a folder (".gradle" is shown); the Hidden /
+    System attributes do, following Explorer's own view settings unless overridden.
+    """
+    if show_hidden is None:
+        show_hidden = explorer_shows_hidden()
+    if show_protected is None:
+        show_protected = explorer_shows_protected_os_files()
     out: list[Path] = []
     try:
         with os.scandir(path) as it:
@@ -78,15 +135,37 @@ def subfolders(path: Path, limit: int = 400) -> list[Path]:
                 if len(out) >= limit:
                     break
                 try:
-                    if not entry.is_dir(follow_symlinks=False) or entry.name.startswith("."):
-                        continue
-                    if os.name == "nt":
-                        attrs = entry.stat(follow_symlinks=False).st_file_attributes
-                        if attrs & 0x2 or attrs & 0x4:   # FILE_ATTRIBUTE_HIDDEN / SYSTEM
-                            continue
+                    if entry.is_dir(follow_symlinks=False) and _visible(entry, show_hidden, show_protected):
+                        out.append(Path(entry.path))
                 except OSError:
                     continue
-                out.append(Path(entry.path))
     except OSError:
         return []
     return sorted(out, key=lambda p: p.name.lower())
+
+
+def has_subfolder(path: Path, show_hidden: Optional[bool] = None) -> bool:
+    """Cheap check for the navigation pane's expand chevron (stops at the first match)."""
+    return bool(subfolders(path, limit=1, show_hidden=show_hidden))
+
+
+def known_folders() -> list[tuple[str, Path]]:
+    """Explorer's default Quick access pins, resolved to their real (possibly OneDrive) paths."""
+    from PyQt6.QtCore import QStandardPaths
+    L = QStandardPaths.StandardLocation
+    out = []
+    for label, loc in (("Desktop", L.DesktopLocation), ("Downloads", L.DownloadLocation),
+                       ("Documents", L.DocumentsLocation), ("Pictures", L.PicturesLocation),
+                       ("Music", L.MusicLocation), ("Videos", L.MoviesLocation)):
+        p = QStandardPaths.writableLocation(loc)
+        if p and Path(p).is_dir():
+            out.append((label, Path(p)))
+    return out
+
+
+def onedrive_root() -> Optional[Path]:
+    for var in ("OneDriveConsumer", "OneDrive", "OneDriveCommercial"):
+        v = os.environ.get(var)
+        if v and Path(v).is_dir():
+            return Path(v)
+    return None

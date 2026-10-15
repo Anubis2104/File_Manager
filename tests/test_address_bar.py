@@ -47,10 +47,18 @@ def make(app):
 
 
 @pytest.fixture
-def tree(tmp_path):
+def tree(tmp_path, monkeypatch):
+    import ui.shell
+    monkeypatch.setattr(ui.shell, "explorer_shows_hidden", lambda: False)   # Explorer defaults
+    monkeypatch.setattr(ui.shell, "explorer_shows_protected_os_files", lambda: False)
     base = tmp_path / "Photos"
-    for name in ("2024", "2025", "Album B", "album a", ".hidden"):
+    for name in ("2024", "2025", "Album B", "album a", ".gradle", "secret"):
         (base / name).mkdir(parents=True)
+    if sys.platform == "win32":
+        import ctypes
+        ctypes.windll.kernel32.SetFileAttributesW(str(base / "secret"), 0x2)   # FILE_ATTRIBUTE_HIDDEN
+    else:
+        (base / "secret").rename(base / ".secret")
     (base / "not_a_dir.jpg").write_bytes(b"x")
     return base
 
@@ -80,10 +88,11 @@ def test_chevron_menu_lists_visible_subfolders_sorted(make, tree):
     bar.set_path(tree)
     menu = bar._children_menu(tree)
     names = [a.text() for a in menu.actions()]
-    assert names == ["2024", "2025", "album a", "Album B"]    # no files, no dot-folders
+    # Like Explorer on Windows: a leading dot doesn't hide ".gradle"; the Hidden attribute does
+    assert names == [".gradle", "2024", "2025", "album a", "Album B"]
 
     spy = QSignalSpy(bar.navigate_requested)
-    menu.actions()[1].trigger()
+    menu.actions()[2].trigger()
     assert spy[0][0] == tree / "2025"
 
 
