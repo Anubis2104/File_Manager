@@ -70,6 +70,34 @@ def _dwm_set(hwnd: int, attr: int, value: int) -> bool:
         return False
 
 
+_PREFERRED_APP_MODE = {True: 2, False: 3}      # uxtheme PreferredAppMode: ForceDark / ForceLight
+
+
+def set_dark_menus(dark: bool) -> bool:
+    """
+    Make classic Win32 popup menus (the Shell's "Show more options" menu) dark or light
+    like the app. uxtheme's SetPreferredAppMode / RefreshImmersiveColorPolicyState /
+    FlushMenuThemes (ordinals 135 / 104 / 136, Windows 10 1903+) are what Explorer and
+    Notepad use; the setting is per process and changes nothing system-wide.
+    """
+    if not IS_WINDOWS or sys.getwindowsversion().build < 18362:
+        return False
+    try:
+        ux = ctypes.WinDLL("uxtheme")
+        refresh, set_mode, flush = ux[104], ux[135], ux[136]
+        set_mode.argtypes, set_mode.restype = [ctypes.c_int], ctypes.c_int
+        refresh.argtypes, refresh.restype = [], None
+        flush.argtypes, flush.restype = [], None
+        set_mode(_PREFERRED_APP_MODE[bool(dark)])
+        refresh()                                   # without it the mode only applies to new threads
+        flush()
+        return True
+    except (OSError, AttributeError) as exc:
+        from utils.safe_log import log_swallowed
+        log_swallowed("UI:Theme", exc, "Menu Windows không đổi được sáng/tối")
+        return False
+
+
 def _frame_thickness(hwnd: int) -> tuple[int, int]:
     """Physical-pixel resize-frame thickness (what a maximized window overhangs the screen by)."""
     try:

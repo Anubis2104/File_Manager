@@ -5,6 +5,7 @@ All panels, workers, and dialogs are connected here.
 """
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from typing import Optional
@@ -37,7 +38,7 @@ from core.background_manager    import load_appearance_settings
 from ui.widgets.title_bar       import TitleBar
 from ui.widgets.command_bar     import CommandBar
 from core.file_ops              import invalid_filename_reason
-from ui.win_chrome              import IS_WINDOWS, WindowChrome
+from ui.win_chrome              import IS_WINDOWS, WindowChrome, set_dark_menus
 from utils.cuda_helper          import get_cuda_info
 from ui.theme import theme, tok
 
@@ -60,6 +61,7 @@ class MainWindow(QMainWindow):
         # Explorer-style chrome: tabs in the title bar over a Mica backdrop (Windows only;
         # offscreen/tests keep the native title bar)
         self._chrome: Optional[WindowChrome] = None
+        self._menu_anchor: tuple[int, int] = (0, 0)   # physical screen point for Shell menus and verbs
         self._native_chrome = IS_WINDOWS and QApplication.platformName() == "windows"
         if self._native_chrome:
             # Keep the native frame (a frameless translucent window would be WS_EX_LAYERED:
@@ -333,6 +335,7 @@ class MainWindow(QMainWindow):
         self.tree_panel.folder_context_menu_requested.connect(self._show_tree_context_menu)
         self.content_panel.folder_navigated.connect(self._navigate_to)
         self.content_panel.file_selected.connect(self.right_dock.show_file)
+        self.content_panel.file_activated.connect(self._open_file_default)
         self.content_panel.selection_changed.connect(self._on_content_selection)
         self.content_panel.context_menu_requested.connect(self._show_content_context_menu)
         self.right_dock.queue_completed.connect(self._refresh)
@@ -457,20 +460,80 @@ class MainWindow(QMainWindow):
         act_copy = menu.addAction(get_svg_icon("copy", tok("text_secondary"), 16), "Sao chép đường dẫn")
         act_copy.triggered.connect(lambda: QApplication.clipboard().setText(str(folder_path)))
 
+        menu.addSeparator()
+        self._menu_anchor = self._to_physical(global_pos)
+        menu.addAction("Thuộc tính", lambda: self._shell_verb([folder_path], "properties"))
+        menu.addAction("Hiện thêm tùy chọn", lambda: self._show_shell_menu([folder_path]))
+
         menu.exec(global_pos)
 
     def _show_content_context_menu(self, global_pos, selected_paths: list[Path]):
         from core.app_logcat import logcat
         logcat.i("UI:ContextMenu", f"Menu chuột phải mở cho {len(selected_paths)} mục tại toạ độ ({global_pos.x()}, {global_pos.y()})")
-        menu = QMenu(self)
+        self._menu_anchor = self._to_physical(global_pos)
+        if QApplication.keyboardModifiers() & Qt.KeyboardModifier.ShiftModifier:
+            self._show_shell_menu(selected_paths)      # Explorer: Shift + right-click = classic menu
+            return
+        menu = self._build_context_menu(selected_paths)
+        menu.exec(global_pos)
+        menu.deleteLater()
 
+    def _build_context_menu(self, paths: list[Path]):
+        """Windows 11 menu: quick-action icons, open/verbs, app tools, Show more options."""
+        from ui import clipboard
+        from ui.widgets.context_menu import ExplorerContextMenu
+        from ui.widgets.command_bar import GLYPH, glyph_icon
+        folder = self.content_panel.current_dir
+        files = [p for p in paths if p.is_file()]
+        single = paths[0] if len(paths) == 1 else None
+
+        if paths:
+            quick = [("cut", "Cắt (Ctrl+X)", lambda: self._clipboard_put(cut=True)),
+                     ("copy", "Sao chép (Ctrl+C)", lambda: self._clipboard_put(cut=False)),
+                     ("rename", "Đổi tên (F2)", self._rename_selected),
+                     ("share", "Chia sẻ", lambda: self._shell_verb(paths, "windows.share")),
+                     ("delete", "Xóa (Delete)", self._delete_selected)]
+        else:
+            quick = [("paste", "Dán (Ctrl+V)", self._paste_from_clipboard)] if clipboard.has_files() else []
+        menu = ExplorerContextMenu(quick, self)
+
+        if paths:
+            menu.add("open", "Mở", lambda: self._open_items(paths), "Enter")
+            if single is not None and single.is_file():
+                menu.add(None, "Mở bằng...", lambda: self._shell_verb([single], "openas"))
+            if files:
+                menu.add(None, "Xem trước nhanh", lambda: self._open_quick_look(files[0]), "Space")
+            if single is not None and single.is_dir():
+                if self.tree_panel.is_pinned(single):
+                    menu.add("pin", "Bỏ ghim khỏi Truy cập nhanh", lambda: self.tree_panel.unpin(single))
+                else:
+                    menu.add("pin", "Ghim vào Truy cập nhanh", lambda: self.tree_panel.pin(single))
+            menu.addSeparator()
+            tools = menu.addMenu(glyph_icon(GLYPH["tools"]), "FileManagerPro")
+            self._add_app_tools(tools, paths)
+            menu.add("copy_path", "Sao chép đường dẫn", lambda: self._copy_as_path(paths))
+            menu.add("properties", "Thuộc tính", lambda: self._shell_verb(paths, "properties"), "Alt+Enter")
+        elif folder is not None:
+            cb = self.command_bar
+            cb.view_menu.setTitle("Xem")
+            cb.sort_menu.setTitle("Sắp xếp")
+            menu.addMenu(cb.view_menu).setIcon(glyph_icon(GLYPH["view"]))
+            menu.addMenu(cb.sort_menu).setIcon(glyph_icon(GLYPH["sort"]))
+            menu.add(None, "Làm mới", self._refresh, "F5")
+            menu.addSeparator()
+            new_menu = menu.addMenu(glyph_icon(GLYPH["new"]), "Mới")
+            new_menu.addAction("Thư mục", lambda: self._create_new_folder(folder))
+            tools = menu.addMenu(glyph_icon(GLYPH["tools"]), "FileManagerPro")
+            self._add_app_tools(tools, [])
+            menu.add("properties", "Thuộc tính", lambda: self._shell_verb([folder], "properties"), "Alt+Enter")
+        menu.addSeparator()
+        menu.add("more_options", "Hiện thêm tùy chọn", lambda: self._show_shell_menu(paths), "Shift+F10")
+        return menu
+
+    def _add_app_tools(self, menu, selected_paths: list[Path]):
+        """FileManagerPro's own verbs for the selection (previously the whole context menu)."""
         selected_folders = [p for p in selected_paths if p.is_dir()]
         selected_files = [p for p in selected_paths if p.is_file()]
-
-        if selected_files:
-            act_peek = menu.addAction(get_svg_icon("eye", tok("accent"), 16), "Xem trước nhanh (Space)")
-            act_peek.triggered.connect(lambda: self._open_quick_look(selected_files[0]))
-            menu.addSeparator()
 
         if selected_folders:
             folder_text = selected_folders[0].name if len(selected_folders) == 1 else f"{len(selected_folders)} thư mục"
@@ -503,9 +566,90 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
 
         act_insp = menu.addAction(get_svg_icon("inspector", tok("accent"), 16), "Kiểm định tệp này")
-        act_insp.triggered.connect(lambda: self.tab_widget.setCurrentIndex(2))
+        act_insp.triggered.connect(lambda: self._show_page(2))
 
-        menu.exec(global_pos)
+    # ── Shell (native Windows) verbs ──
+
+    def _to_physical(self, global_pos) -> tuple[int, int]:
+        """Qt's logical global point -> the physical screen pixels Win32 menus take."""
+        if not IS_WINDOWS:
+            return (global_pos.x(), global_pos.y())
+        import ctypes
+        from ctypes import wintypes
+        local = self.mapFromGlobal(global_pos)
+        dpr = self.devicePixelRatioF()
+        pt = wintypes.POINT(round(local.x() * dpr), round(local.y() * dpr))
+        ctypes.windll.user32.ClientToScreen(wintypes.HWND(int(self.winId())), ctypes.byref(pt))
+        return (pt.x, pt.y)
+
+    def _keyboard_shell_menu(self):
+        """Shift+F10: the classic menu at the focused item, as in Explorer."""
+        self._menu_anchor = self._to_physical(self.content_panel.selection_anchor())
+        self._show_shell_menu(self.content_panel.get_selected_paths())
+
+    def _keyboard_properties(self):
+        paths = self.content_panel.get_selected_paths()
+        if not paths and self.content_panel.current_dir is not None:
+            paths = [self.content_panel.current_dir]
+        self._menu_anchor = self._to_physical(self.content_panel.selection_anchor())
+        self._shell_verb(paths, "properties")
+
+    def _shell_verb(self, paths: list[Path], verb: str):
+        """Run a Shell verb ('properties', 'openas', 'windows.share', ...) on items."""
+        if not paths or not IS_WINDOWS:
+            return
+        from core.app_logcat import logcat
+        from utils.shell_menu import ShellContextMenu
+        logcat.i("UI:ShellVerb", f"Shell verb '{verb}' cho {len(paths)} mục")
+        try:
+            with ShellContextMenu(paths, int(self.winId())) as m:
+                x, y = self._menu_anchor
+                m.invoke(verb, x, y, directory=paths[0].parent)
+        except (OSError, ValueError) as exc:
+            logcat.w("UI:ShellVerb", f"Shell verb '{verb}' lỗi: {exc}")
+            QMessageBox.warning(self, "Không thực hiện được", str(exc))
+
+    def _show_shell_menu(self, paths: list[Path]):
+        """'Show more options': the real Windows context menu (7-Zip, Open with, Send to...)."""
+        if not IS_WINDOWS:
+            return
+        from utils.shell_menu import ShellContextMenu
+        folder = self.content_panel.current_dir
+        targets, background = (paths, False) if paths else ([folder], True)
+        if not targets or targets[0] is None:
+            return
+        x, y = self._menu_anchor
+        try:
+            with ShellContextMenu(targets, int(self.winId()), background=background,
+                                  extended=bool(QApplication.keyboardModifiers() & Qt.KeyboardModifier.ShiftModifier)) as m:
+                verb = m.show(x, y)
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(self, "Menu Windows không khả dụng", str(exc))
+            return
+        if verb == "rename":                          # the Shell hands renaming to the host view
+            self._rename_selected()
+        self._refresh()
+
+    def _open_items(self, paths: list[Path]):
+        if len(paths) == 1 and paths[0].is_dir():
+            self._navigate_to(paths[0])
+            return
+        for p in paths[:15]:                          # Explorer also asks before opening a flood of files
+            if p.is_dir():
+                self.workspace_tabs.add_tab(p)
+            else:
+                self._open_file_default(p)
+
+    @staticmethod
+    def _open_file_default(path: Path):
+        try:
+            os.startfile(str(path))                   # Windows default app, like a double-click in Explorer
+        except OSError as exc:
+            QMessageBox.warning(None, "Không mở được tệp", f"{path.name}: {exc}")
+
+    @staticmethod
+    def _copy_as_path(paths: list[Path]):
+        QApplication.clipboard().setText("\n".join(f'"{p}"' for p in paths))   # Explorer's "Copy as path"
 
     # ─────────────────────────────────────────────
     # Shortcuts
@@ -520,7 +664,9 @@ class MainWindow(QMainWindow):
                           ("Ctrl+C", lambda: self._clipboard_put(cut=False)),
                           ("Ctrl+V", self._paste_from_clipboard),
                           ("Delete", self._delete_selected),
-                          ("F2", self._rename_selected)):
+                          ("F2", self._rename_selected),
+                          ("Shift+F10", self._keyboard_shell_menu),
+                          ("Alt+Return", self._keyboard_properties)):
             QShortcut(QKeySequence(seq), self.content_panel, activated=slot,
                       context=Qt.ShortcutContext.WidgetWithChildrenShortcut)
         QShortcut(QKeySequence("Ctrl+Shift+N"), self,
@@ -1143,6 +1289,7 @@ class MainWindow(QMainWindow):
             if not self._chrome.install(dark=theme().is_dark, backdrop=self._backdrop_kind):
                 self._chrome = None   # native title bar stays; tabs sit in our bar below it
             self._apply_backdrop()
+            set_dark_menus(theme().is_dark)
             self._sync_caption_space()
             QTimer.singleShot(250, self._sync_caption_space)
 
@@ -1158,16 +1305,31 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(150, self._sync_caption_space)   # DWM may update bounds later
 
     def nativeEvent(self, event_type, message):
-        if self._chrome is not None and event_type == b"windows_generic_MSG":
-            handled, result = self._chrome.native_event(message)
-            if handled:
-                return True, result
+        # An exception escaping a PyQt virtual is qFatal (the process aborts), so contain it
+        try:
+            if IS_WINDOWS and event_type == b"windows_generic_MSG":
+                from utils.shell_menu import FORWARDED_MESSAGES, active_menu_message
+                from ctypes import wintypes
+                msg = wintypes.MSG.from_address(int(message))
+                if msg.message in FORWARDED_MESSAGES:
+                    result = active_menu_message(msg.message, msg.wParam or 0, msg.lParam or 0)
+                    if result is not None:
+                        return True, result
+            if self._chrome is not None and event_type == b"windows_generic_MSG":
+                handled, result = self._chrome.native_event(message)
+                if handled:
+                    return True, result
+        except Exception as exc:
+            from utils.safe_log import log_swallowed
+            log_swallowed("UI:NativeEvent", exc, "nativeEvent")
         # Not super(): PyQt6 6.11 returns (False, None) from it and handing that back
         # to Qt crashes (access violation). QWidget::nativeEvent only returns false.
         return False, 0
 
     def _on_theme_changed(self, _tokens=None):
         self._apply_backdrop()
+        if self._native_chrome:
+            set_dark_menus(theme().is_dark)
 
     def _apply_backdrop(self):
         kind = getattr(self, "_backdrop_kind", "tabbed")

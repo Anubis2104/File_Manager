@@ -13,10 +13,10 @@ from typing import Optional
 
 from PyQt6.QtCore import (
     Qt, QDir, QSortFilterProxyModel, pyqtSignal,
-    QModelIndex, QSize, QThread, QEvent, QTimer,
+    QModelIndex, QSize, QThread, QEvent, QTimer, QPoint, QRect,
 )
 from PyQt6.QtGui import (
-    QIcon, QPixmap, QColor, QFileSystemModel, QKeyEvent,
+    QIcon, QPixmap, QColor, QFileSystemModel, QKeyEvent, QCursor,
     QDragEnterEvent, QDragLeaveEvent, QDropEvent,
 )
 from PyQt6.QtWidgets import (
@@ -174,6 +174,7 @@ class ContentPanel(QWidget):
     browse_folder_requested= pyqtSignal()
     files_dropped          = pyqtSignal(list, Path)        # (src_paths, dest_dir)
     view_mode_changed      = pyqtSignal(str)               # a VIEW_SPECS key ('detail', 'large', ...)
+    file_activated         = pyqtSignal(Path)              # double-click / Enter on a file: open it
     item_count_changed     = pyqtSignal(int)
 
     def __init__(self, parent=None):
@@ -408,6 +409,7 @@ class ContentPanel(QWidget):
             self.folder_navigated.emit(path)
         elif path.is_file():
             self.file_selected.emit(path)
+            self.file_activated.emit(path)
 
     def _on_selection_changed(self):
         active_view = self.grid_view if self.stack.currentIndex() == 0 else self.detail_view
@@ -445,8 +447,20 @@ class ContentPanel(QWidget):
                 files.append(p)
         return files
 
+    def active_view(self):
+        return self.grid_view if self.stack.currentIndex() == 0 else self.detail_view
+
+    def selection_anchor(self) -> QPoint:
+        """Global position for a keyboard-opened menu (Shift+F10): the current item, else the view."""
+        view = self.active_view()
+        idx = view.currentIndex()
+        rect = view.visualRect(idx) if idx.isValid() else QRect()
+        if rect.isValid() and view.viewport().rect().intersects(rect):
+            return view.viewport().mapToGlobal(rect.center())
+        return view.viewport().mapToGlobal(view.viewport().rect().center())
+
     def _on_context_menu(self, pos):
-        active_view = self.grid_view if self.stack.currentIndex() == 0 else self.detail_view
+        active_view = self.active_view()
         global_pos = active_view.viewport().mapToGlobal(pos)
         selected = self.get_selected_paths()
         idx = active_view.indexAt(pos)
@@ -454,6 +468,11 @@ class ContentPanel(QWidget):
             clicked_path = Path(self.model.filePath(idx))
             if clicked_path not in selected:
                 selected = [clicked_path]
+        elif active_view.viewport().mapFromGlobal(QCursor.pos()) == pos:
+            # Explorer: right-clicking empty space is about the folder, not the old selection
+            # (the keyboard Menu key reports a position away from the cursor and keeps it)
+            active_view.clearSelection()
+            selected = []
         self.context_menu_requested.emit(global_pos, selected)
 
     # ─────────────────────────────────────────────
