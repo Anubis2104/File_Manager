@@ -69,6 +69,7 @@ class CommandBar(QToolBar):
     sort_requested = pyqtSignal(int, object)      # (column, Qt.SortOrder)
     view_requested = pyqtSignal(str)              # "grid" | "detail"
     details_toggled = pyqtSignal(bool)
+    pane_requested = pyqtSignal(str)     # 'details' | 'preview' | '' (hidden)
 
     def __init__(self, tools_actions: Sequence[Optional[QAction]] = (),
                  more_actions: Sequence[Optional[QAction]] = (), parent=None):
@@ -141,10 +142,16 @@ class CommandBar(QToolBar):
         self.act_view_detail = self.view_actions["detail"]
         self.act_view_detail.setChecked(True)
         self.view_menu.addSeparator()
+        self.act_preview_pane = self.view_menu.addAction("Khung xem trước")
         self.act_details_pane = self.view_menu.addAction("Khung chi tiết")
-        self.act_details_pane.setCheckable(True)
+        for act, seq in ((self.act_preview_pane, "Alt+P"), (self.act_details_pane, "Alt+Shift+P")):
+            act.setCheckable(True)
+            act.setShortcut(seq)
+            act.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)    # display only (see New)
+            act.setShortcutVisibleInContextMenu(True)
         self.act_details_pane.setChecked(True)
         self.act_details_pane.toggled.connect(self._on_details_toggled)
+        self.act_preview_pane.toggled.connect(self._on_preview_toggled)
         self.btn_view = self._button("view", "Xem", "Chế độ xem", menu=self.view_menu)
         self.addSeparator()
 
@@ -159,7 +166,7 @@ class CommandBar(QToolBar):
         self.addWidget(spacer)
 
         # Details pane toggle (right edge, like Explorer)
-        self.btn_details = self._button("details", "Chi tiết", "Hiện/ẩn khung chi tiết")
+        self.btn_details = self._button("details", "Chi tiết", "Hiện/ẩn khung chi tiết (Alt+Shift+P)")
         self.btn_details.setCheckable(True)
         self.btn_details.setChecked(True)
         self.btn_details.toggled.connect(self._on_details_toggled)
@@ -230,8 +237,18 @@ class CommandBar(QToolBar):
         self.sort_requested.emit(self._sort_column, self._sort_order)
 
     def _on_details_toggled(self, on: bool) -> None:
-        # Keep the toolbar button and the View-menu entry in sync, emit once
-        for w in (self.btn_details, self.act_details_pane):
+        # Keep the toolbar button and the View-menu entries in sync, emit once
+        self.set_pane("details" if on else "")
+        self.details_toggled.emit(on)
+        self.pane_requested.emit("details" if on else "")
+
+    def _on_preview_toggled(self, on: bool) -> None:
+        self.set_pane("preview" if on else "")
+        self.pane_requested.emit("preview" if on else "")
+
+    def set_pane(self, mode: str) -> None:
+        """Reflect the pane state ('details' / 'preview' / '') without emitting."""
+        for w, on in ((self.btn_details, mode == "details"), (self.act_details_pane, mode == "details"),
+                      (self.act_preview_pane, mode == "preview")):
             if w.isChecked() != on:
                 w.blockSignals(True); w.setChecked(on); w.blockSignals(False)
-        self.details_toggled.emit(on)

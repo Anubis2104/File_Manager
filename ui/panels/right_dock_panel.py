@@ -1,7 +1,7 @@
 """
 ui/panels/right_dock_panel.py
-Dual-Mode Right Panel:
-- Normal Mode (Default): Full-featured PreviewPanel (photo/video preview, EXIF, metadata).
+Explorer's right-hand pane:
+- Default: DetailsPane (ui/panels/details_pane.py), as the Details or the Preview pane.
 - Queue Mode (On-demand): Sequential Drag-and-Drop Queue Dock with live thumbnail slots,
   automatic number ordering [Số thứ tự]_[Tên cũ], quick-sort tools, and direct execution.
 
@@ -23,7 +23,7 @@ from PyQt6.QtWidgets import (
     QFrame, QSizePolicy, QToolButton,
 )
 
-from ui.panels.preview_panel import PreviewPanel
+from ui.panels.details_pane import DetailsPane
 from core.scanner import FileInfo, DirectoryScanner
 from core.renamer import build_new_name, RenameEngine
 from core.logger import RenameLogger
@@ -572,14 +572,14 @@ class QueueDockWidget(QWidget):
 
 class RightDockPanel(QWidget):
     """
-    Combined Right-hand Panel:
-    - Page 0 (Default): Standard PreviewPanel (Full preview, EXIF, metadata).
-    - Page 1: QueueDockWidget (Sequential drag-and-drop queue with preview thumbnails).
-
-    Allows switching easily between normal preview mode and queue mode.
+    Explorer's right-hand pane:
+    - Page 0 (default): DetailsPane, in "details" (Alt+Shift+P) or "preview" (Alt+P) mode.
+    - Page 1: QueueDockWidget (sequential drag-and-drop rename queue), opened from the
+      Tools / context menu and closed with its own button.
     """
     file_preview_requested = pyqtSignal(Path)
     queue_completed = pyqtSignal()
+    queue_shown = pyqtSignal(bool)      # the window shows the dock for the queue even if the pane is off
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -589,47 +589,13 @@ class RightDockPanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-
-        # ── Top Segmented Pill Header ──
-        top_bar = QWidget()
-        style(top_bar, "background: @bg_card; border-bottom: 1px solid @stroke_control;")
-        tb_layout = QHBoxLayout(top_bar)
-        tb_layout.setContentsMargins(6, 4, 6, 4)
-        tb_layout.setSpacing(4)
-
-        self.btn_mode_preview = QPushButton("👁️ Xem trước")
-        self.btn_mode_preview.setCheckable(True)
-        self.btn_mode_preview.setChecked(True)
-        self.btn_mode_preview.setToolTip("Xem trước chi tiết ảnh/video, thông số EXIF")
-
-        self.btn_mode_queue = QPushButton("🔢 Hàng đợi Đổi tên")
-        self.btn_mode_queue.setCheckable(True)
-        self.btn_mode_queue.setChecked(False)
-        self.btn_mode_queue.setToolTip("Mở dãy hàng đợi kéo thả đánh số thứ tự")
-
-        for btn in (self.btn_mode_preview, self.btn_mode_queue):
-            btn.setFixedHeight(26)
-            style(btn, 
-                "QPushButton { background: transparent; color: @text_secondary; border: 1px solid transparent; "
-                "border-radius: 5px; padding: 2px 10px; font-size: 8.5pt; font-weight: 600; }"
-                "QPushButton:checked { background: @fill_selected; color: @accent; border-color: @accent; }"
-                "QPushButton:hover:!checked { background: @fill_hover; color: @text_secondary; }"
-            )
-            tb_layout.addWidget(btn)
-
-        self.btn_mode_preview.clicked.connect(lambda: self.set_mode("preview"))
-        self.btn_mode_queue.clicked.connect(lambda: self.set_mode("queue"))
-
-        layout.addWidget(top_bar)
-
-        # ── Stack: Page 0 (Preview), Page 1 (Queue) ──
         self.stack = QStackedWidget()
 
-        self.preview_panel = PreviewPanel(self)
-        self.stack.addWidget(self.preview_panel)  # Index 0
+        self.details_pane = DetailsPane(self)
+        self.stack.addWidget(self.details_pane)   # Index 0
 
         self.queue_dock = QueueDockWidget(self)
-        self.queue_dock.close_requested.connect(lambda: self.set_mode("preview"))
+        self.queue_dock.close_requested.connect(self._close_queue)
         self.queue_dock.file_selected.connect(self._on_queue_item_selected)
         self.queue_dock.queue_completed.connect(self.queue_completed.emit)
         self.stack.addWidget(self.queue_dock)     # Index 1
@@ -637,31 +603,37 @@ class RightDockPanel(QWidget):
         layout.addWidget(self.stack)
 
     def set_mode(self, mode: str):
-        """Switch between 'preview' and 'queue' modes."""
-        if mode == "queue":
-            self.stack.setCurrentIndex(1)
-            self.btn_mode_preview.setChecked(False)
-            self.btn_mode_queue.setChecked(True)
-        else:
-            self.stack.setCurrentIndex(0)
-            self.btn_mode_preview.setChecked(True)
-            self.btn_mode_queue.setChecked(False)
+        """'queue' shows the rename queue; anything else returns to the details/preview pane."""
+        was_queue = self.is_queue_mode()
+        self.stack.setCurrentIndex(1 if mode == "queue" else 0)
+        if was_queue != self.is_queue_mode():
+            self.queue_shown.emit(self.is_queue_mode())
+
+    def _close_queue(self):
+        self.set_mode("details")
+
+    def set_pane_mode(self, mode: str):
+        """'details' or 'preview' (Explorer's two panes)."""
+        self.details_pane.set_mode(mode)
 
     def is_queue_mode(self) -> bool:
         return self.stack.currentIndex() == 1
 
     def show_file(self, path: Path):
-        """Pass selected file to PreviewPanel (and optionally highlight in queue)."""
-        self.preview_panel.show_file(path)
+        self.details_pane.show_items([path], path.parent)
+
+    def show_selection(self, paths: list[Path], folder: Optional[Path]):
+        self.details_pane.show_items(paths, folder)
 
     def _on_queue_item_selected(self, path: Path):
-        """When user clicks an item in the queue dock, show preview."""
-        self.preview_panel.show_file(path)
+        """When user clicks an item in the queue dock, show it in the details pane."""
+        self.details_pane.show_items([path], path.parent)
         self.file_preview_requested.emit(path)
 
     def set_folder(self, folder: Path):
-        """Sync folder with QueueDockWidget."""
+        """Sync folder with QueueDockWidget and show the folder's details."""
         self.queue_dock.set_folder(folder)
+        self.details_pane.show_items([], folder)
 
     def open_queue_with_folder(self, folder: Path, sync: bool = False):
         """Directly open queue mode and load all files in folder."""

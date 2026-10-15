@@ -22,7 +22,6 @@ from PyQt6.QtWidgets import (
 
 from ui.panels.tree_panel       import TreePanel
 from ui.panels.content_panel    import ContentPanel
-from ui.panels.preview_panel    import PreviewPanel
 from ui.panels.right_dock_panel import RightDockPanel
 from ui.panels.dup_preview_panel import DupPreviewPanel
 from ui.panels.inspector_panel  import InspectorPanel
@@ -179,7 +178,7 @@ class MainWindow(QMainWindow):
         cb.delete_requested.connect(self._delete_selected)
         cb.sort_requested.connect(self.content_panel.sort_by)
         cb.view_requested.connect(self.content_panel.set_view)
-        cb.details_toggled.connect(self.right_dock.setVisible)
+        cb.pane_requested.connect(self._set_pane)
         self.content_panel.view_mode_changed.connect(cb.set_view_mode)
         self.content_panel.view_mode_changed.connect(self.app_statusbar.set_view_mode)
         self.content_panel.item_count_changed.connect(self.app_statusbar.set_item_count)
@@ -248,7 +247,8 @@ class MainWindow(QMainWindow):
         self.content_panel = ContentPanel()
         right_splitter.addWidget(self.content_panel)
 
-        # Feature 1: Dual-mode Right Dock (PreviewPanel <-> QueueDockWidget)
+        # Explorer's details / preview pane (and the rename queue on demand)
+        self._pane_mode = "details"
         self.right_dock = RightDockPanel(self)
         self.right_dock.setMinimumWidth(260)
         self.right_dock.setMaximumWidth(460)
@@ -339,6 +339,7 @@ class MainWindow(QMainWindow):
         self.content_panel.selection_changed.connect(self._on_content_selection)
         self.content_panel.context_menu_requested.connect(self._show_content_context_menu)
         self.right_dock.queue_completed.connect(self._refresh)
+        self.right_dock.queue_shown.connect(self._on_queue_shown)
         # Browser-style tabs signals
         self.workspace_tabs.tab_switched.connect(self._on_workspace_tab_switched)
         self.workspace_tabs.new_tab_requested.connect(self._on_new_workspace_tab)
@@ -411,6 +412,7 @@ class MainWindow(QMainWindow):
 
     def _on_content_selection(self, selected: list):
         self.app_statusbar.update_selection(selected)
+        self.right_dock.show_selection(selected, self.content_panel.current_dir)
         self.act_rename.setEnabled(True)
         from core.app_logcat import logcat
         logcat.d("UI:Selection", f"Người dùng chọn {len(selected)} mục")
@@ -675,6 +677,8 @@ class MainWindow(QMainWindow):
         QShortcut(QKeySequence("Alt+Right"),  self, activated=self.toolbar.go_forward)
         QShortcut(QKeySequence("Alt+Up"),     self, activated=self.toolbar.go_up)
         QShortcut(QKeySequence("Ctrl+L"),     self, activated=self.toolbar.focus_address_bar)
+        QShortcut(QKeySequence("Alt+P"),       self, activated=lambda: self._toggle_pane("preview"))
+        QShortcut(QKeySequence("Alt+Shift+P"), self, activated=lambda: self._toggle_pane("details"))
         QShortcut(QKeySequence("Ctrl+F"),     self, activated=self.toolbar.focus_search)
         QShortcut(QKeySequence("Ctrl+R"),     self, activated=self._open_rename_dialog)
         QShortcut(QKeySequence("Ctrl+Shift+C"), self, activated=self._open_convert_dialog)
@@ -832,6 +836,23 @@ class MainWindow(QMainWindow):
         self.app_statusbar.showMessage(f"Đã chuyển {len(paths) - len(failed)} mục vào Thùng rác", 4000)
         if failed:
             QMessageBox.warning(self, "Một số mục không xóa được", "\n".join(failed[:10]))
+
+    def _set_pane(self, mode: str):
+        """'details' / 'preview' shows that pane, '' hides it (Explorer: one pane at a time)."""
+        self._pane_mode = mode
+        if mode:
+            self.right_dock.set_pane_mode(mode)
+            self.right_dock.set_mode(mode)
+        self.right_dock.setVisible(bool(mode))
+        self.command_bar.set_pane(mode)
+
+    def _on_queue_shown(self, shown: bool):
+        # The rename queue lives in the pane's dock: show it even when the pane is off,
+        # and put the dock back the way the pane toggle says when the queue closes
+        self.right_dock.setVisible(shown or bool(self._pane_mode))
+
+    def _toggle_pane(self, mode: str):
+        self._set_pane("" if self._pane_mode == mode and self.right_dock.isVisible() else mode)
 
     def _refresh(self):
         current = self.content_panel.current_dir
