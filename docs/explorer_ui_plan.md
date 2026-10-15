@@ -1,6 +1,6 @@
 # Kế hoạch: Giao diện giống Windows 11 File Explorer
 
-> Trạng thái: Gate 1 đã duyệt (2026-10-14) · **GĐ 0–3 xong** (2026-10-15) · tiếp theo: GĐ 4–5
+> Trạng thái: Gate 1 đã duyệt (2026-10-14) · **GĐ 0–5 xong + thanh trạng thái của GĐ 7** (2026-10-15) · tiếp theo: GĐ 6 (menu chuột phải), 7 (khung chi tiết), 8, 9
 > Quyết định đã chốt (/grill-me): giống tối đa nhưng giữ tính năng riêng · theme theo hệ thống (sáng/tối + accent) ·
 > tính năng riêng đặt trên command bar + menu ⋯ · menu chuột phải kiểu Win11 + "Show more options" gốc của Shell.
 
@@ -37,6 +37,10 @@
 - Tín hiệu từ singleton (`theme().changed`) chỉ nối vào **bound method** của QObject, không nối lambda:
   lambda không tự ngắt khi widget bị hủy → crash khi đổi theme sau khi đóng cửa sổ.
 - Nút Share của Explorer cố ý không làm (cần WinRT share sheet); command bar không có nút giả.
+- Shell API cần đường dẫn dấu `\`: `QFileSystemModel.filePath()` trả `C:/...` → luôn `os.path.normpath` trước khi gọi.
+- `QImage.fromHBITMAP` bỏ kênh alpha → tự đọc DIB 32-bit (alpha toàn 0 = ảnh đặc).
+- Action trong menu chỉ để hiển thị phím tắt phải dùng `WidgetShortcut`, nếu không trùng với `QShortcut` → Qt coi là ambiguous, không phím nào chạy.
+- Cây điều hướng theo đúng cài đặt Explorer của máy (Hidden / ShowSuperHidden / NavPaneExpandToCurrentFolder / HideFileExt).
 
 ## Định nghĩa hoàn thành (DoD) cho mỗi giai đoạn
 
