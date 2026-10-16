@@ -175,6 +175,7 @@ class MainWindow(QMainWindow):
         cb.copy_requested.connect(lambda: self._clipboard_put(cut=False))
         cb.paste_requested.connect(self._paste_from_clipboard)
         cb.rename_requested.connect(self._rename_selected)
+        cb.share_requested.connect(lambda: self._shell_verb(self.content_panel.get_selected_paths(), "windows.share"))
         cb.delete_requested.connect(self._delete_selected)
         cb.sort_requested.connect(self.content_panel.sort_by)
         cb.view_requested.connect(self.content_panel.set_view)
@@ -661,6 +662,7 @@ class MainWindow(QMainWindow):
                           ("Delete", self._delete_selected),
                           ("F2", self._rename_selected),
                           ("Shift+F10", self._keyboard_shell_menu),
+                          ("Backspace", lambda: self.toolbar.go_up()),          # Explorer: up one level
                           ("Alt+Return", self._keyboard_properties)):
             QShortcut(QKeySequence(seq), self.content_panel, activated=slot,
                       context=Qt.ShortcutContext.WidgetWithChildrenShortcut)
@@ -671,6 +673,7 @@ class MainWindow(QMainWindow):
         QShortcut(QKeySequence("Alt+Up"),     self, activated=self.toolbar.go_up)
         QShortcut(QKeySequence("Ctrl+L"),     self, activated=self.toolbar.focus_address_bar)
         QShortcut(QKeySequence("Alt+P"),       self, activated=lambda: self._toggle_pane("preview"))
+        QShortcut(QKeySequence("Alt+D"),       self, activated=self.toolbar.focus_address_bar)
         QShortcut(QKeySequence("Alt+Shift+P"), self, activated=lambda: self._toggle_pane("details"))
         QShortcut(QKeySequence("Ctrl+F"),     self, activated=self.toolbar.focus_search)
         QShortcut(QKeySequence("Ctrl+R"),     self, activated=self._open_rename_dialog)

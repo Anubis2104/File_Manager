@@ -48,6 +48,7 @@ def _flat_button(text: str = "", glyph_px: int = 0, tooltip: str = "") -> QToolB
     if glyph_px:
         b.setFont(glyph_font(glyph_px))
     b.setToolTip(tooltip)
+    b.setAccessibleName(text or tooltip.split(" (")[0])     # names for icon-only and crumb buttons
     b.setAutoRaise(True)
     b.setFocusPolicy(Qt.FocusPolicy.TabFocus)
     style(b, _FLAT_BUTTON_QSS)

@@ -354,6 +354,7 @@ class DetailsPane(QWidget):
             v.setFrame(False)
             v.setCursorPosition(0)
             v.setToolTip(value)
+            v.setAccessibleName(key)
             v.setMinimumWidth(0)
             v.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
             style(v, "QLineEdit { background: transparent; color: @text_primary; padding: 0px; }")

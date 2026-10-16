@@ -14,12 +14,6 @@ from PyQt6.QtWidgets import QHBoxLayout, QMenu, QToolButton, QWidget, QWidgetAct
 from ui.theme import style
 from ui.widgets.command_bar import GLYPH, glyph_icon
 
-GLYPH.setdefault("share", "")
-GLYPH.setdefault("open", "")
-GLYPH.setdefault("more_options", "")
-GLYPH.setdefault("properties", "")
-GLYPH.setdefault("copy_path", "")
-GLYPH.setdefault("pin", "")
 
 _ROW_BUTTON_QSS = (
     "QToolButton { background: transparent; border: none; border-radius: 4px; padding: 6px; }"

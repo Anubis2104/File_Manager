@@ -22,7 +22,7 @@ from ui.theme import qcolor, style, theme
 GLYPH = {
     "new": "", "cut": "", "copy": "", "paste": "",
     "rename": "", "delete": "", "sort": "", "view": "",
-    "tools": "", "more": "", "details": "",
+    "tools": "", "more": "", "details": "", "share": "\ue72d", "open": "\ue8e5", "more_options": "\ue712", "properties": "\ue946", "copy_path": "\ue71b", "pin": "\ue718"
 }
 
 # QFileSystemModel columns
@@ -69,6 +69,7 @@ class CommandBar(QToolBar):
     sort_requested = pyqtSignal(int, object)      # (column, Qt.SortOrder)
     view_requested = pyqtSignal(str)              # "grid" | "detail"
     details_toggled = pyqtSignal(bool)
+    share_requested = pyqtSignal()
     pane_requested = pyqtSignal(str)     # 'details' | 'preview' | '' (hidden)
 
     def __init__(self, tools_actions: Sequence[Optional[QAction]] = (),
@@ -97,6 +98,7 @@ class CommandBar(QToolBar):
         self.btn_copy = self._button("copy", "", "Sao chép (Ctrl+C)", self.copy_requested)
         self.btn_paste = self._button("paste", "", "Dán (Ctrl+V)", self.paste_requested)
         self.btn_rename = self._button("rename", "", "Đổi tên (F2)", self.rename_requested)
+        self.btn_share = self._button("share", "", "Chia sẻ", self.share_requested)
         self.btn_delete = self._button("delete", "", "Xóa vào Thùng rác (Delete)", self.delete_requested)
         self.addSeparator()
 
@@ -183,6 +185,7 @@ class CommandBar(QToolBar):
         b.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon if text
                              else Qt.ToolButtonStyle.ToolButtonIconOnly)
         b.setToolTip(tooltip)
+        b.setAccessibleName(text or tooltip.split(" (")[0])     # icon-only buttons need a name for screen readers
         b.setAutoRaise(True)
         if menu is not None:
             b.setMenu(menu)
@@ -218,7 +221,7 @@ class CommandBar(QToolBar):
 
     def update_state(self, selection_count: int, can_paste: bool) -> None:
         has_sel = selection_count > 0
-        for b in (self.btn_cut, self.btn_copy, self.btn_delete):
+        for b in (self.btn_cut, self.btn_copy, self.btn_delete, self.btn_share):
             b.setEnabled(has_sel)
         self.btn_rename.setEnabled(has_sel)
         self.btn_rename.setToolTip("Đổi tên (F2)" if selection_count <= 1 else "Đổi tên hàng loạt (F2)")

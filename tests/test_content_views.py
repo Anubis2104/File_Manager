@@ -107,9 +107,10 @@ def test_thumbnail_cache_is_async_and_cached(app, tmp_path):
     from ui.thumbnails import ThumbnailCache
     cache = ThumbnailCache.instance()
     f = _jpeg(tmp_path / "a.jpg", (300, 300), (10, 200, 40))
-    spy = QSignalSpy(cache.ready)
     assert cache.get(f, 64) is None                                       # never blocks the caller
-    assert _wait(lambda: len(spy) > 0)
+    # The cache is a process-wide singleton: other tests' thumbnails also emit `ready`,
+    # so wait for this file's own pixmap instead of counting signals
+    assert _wait(lambda: cache.get(f, 64) is not None)
     pm = cache.get(f, 64)
     assert pm is not None and not pm.isNull()
     _jpeg(f, (300, 300), (0, 0, 255))                                     # edited photo -> new key
