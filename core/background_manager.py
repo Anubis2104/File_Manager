@@ -69,14 +69,8 @@ def load_appearance_settings() -> dict:
 def save_appearance_settings(appearance_cfg: dict) -> bool:
     """Save appearance configuration into config/settings.json."""
     try:
-        cfg = {}
-        if SETTINGS_PATH.exists():
-            with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
-                cfg = json.load(f)
-        cfg["appearance"] = appearance_cfg
-        SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(SETTINGS_PATH, "w", encoding="utf-8") as f:
-            json.dump(cfg, f, indent=2, ensure_ascii=False)
+        from utils.settings_store import set_section
+        set_section("appearance", appearance_cfg, SETTINGS_PATH)   # atomic, keeps other sections
         return True
     except Exception:
         return False

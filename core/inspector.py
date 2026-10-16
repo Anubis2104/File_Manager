@@ -59,6 +59,93 @@ def _restore_times(fp: Path, st: os.stat_result) -> None:
         safe_log("w", "INSPECTOR", f"Khong giu duoc thoi gian goc cua {fp.name}: {exc}")
 
 
+def _jpeg_end(buf) -> int:
+    """
+    Offset just past the image's real EOI marker, found by walking marker segments
+    (skipping APPn payloads such as EXIF thumbnails by their length) and scanning
+    entropy-coded data with byte stuffing (FF 00) and restart markers (FF D0..D7).
+    Returns -1 if the structure cannot be followed (truncated / malformed).
+    """
+    n = len(buf)
+    if n < 4 or buf[0] != 0xFF or buf[1] != 0xD8:
+        return -1
+    pos = 2
+    while pos + 1 < n:
+        if buf[pos] != 0xFF:
+            return -1                      # lost marker sync
+        marker = buf[pos + 1]
+        if marker == 0xFF:                 # fill byte before a marker
+            pos += 1
+            continue
+        if marker == 0xD9:                 # EOI
+            return pos + 2
+        if 0xD0 <= marker <= 0xD7 or marker == 0x01:   # standalone markers
+            pos += 2
+            continue
+        if pos + 4 > n:
+            return -1
+        seg_len = int.from_bytes(buf[pos + 2:pos + 4], "big")
+        if seg_len < 2:
+            return -1
+        pos += 2 + seg_len
+        if marker == 0xDA:                 # SOS: entropy-coded data until the next real marker
+            while True:
+                i = buf.find(b"\xff", pos)
+                if i == -1 or i + 1 >= n:
+                    return -1
+                nxt = buf[i + 1]
+                if nxt == 0x00 or 0xD0 <= nxt <= 0xD7:
+                    pos = i + 2            # stuffed byte / restart marker: still scan data
+                elif nxt == 0xFF:
+                    pos = i + 1
+                else:
+                    pos = i                # next segment (DHT/SOS of a progressive JPEG, or EOI)
+                    break
+    return -1
+
+
+def _gif_end(buf) -> int:
+    """
+    Offset just past the GIF trailer (0x3B), found by walking blocks and their
+    sub-blocks, so 0x3B bytes inside image data or extensions are not mistaken for
+    the end. Returns -1 if the structure cannot be followed.
+    """
+    n = len(buf)
+    if n < 13:
+        return -1
+    pos = 13
+    flags = buf[10]
+    if flags & 0x80:                       # global color table
+        pos += 3 * (2 ** ((flags & 0x07) + 1))
+    while pos < n:
+        block = buf[pos]
+        if block == 0x3B:                  # trailer
+            return pos + 1
+        if block == 0x21:                  # extension: introducer + label, then sub-blocks
+            if pos + 2 > n:
+                return -1
+            pos += 2
+        elif block == 0x2C:                # image descriptor (10 bytes) [+ local color table] + LZW size
+            if pos + 10 > n:
+                return -1
+            lflags = buf[pos + 9]
+            pos += 10
+            if lflags & 0x80:
+                pos += 3 * (2 ** ((lflags & 0x07) + 1))
+            pos += 1
+        else:
+            return -1
+        while True:                        # data sub-blocks, terminated by a 0-size block
+            if pos >= n:
+                return -1
+            size = buf[pos]
+            pos += 1
+            if size == 0:
+                break
+            pos += size
+    return -1
+
+
 def _default_backup_dir(fp: Path) -> Path:
     return fp.parent / "_Quarantine"
 
@@ -297,7 +384,9 @@ def inspect_file(filepath: Path | str) -> Dict[str, Any]:
         try:
             with _map_file(fp) as content:
                 total_len = len(content)
-                eoi_idx = content.rfind(b'\xff\xd9')
+                end = _jpeg_end(content)
+                # Malformed structure: fall back to the last EOI marker (previous behavior)
+                eoi_idx = end - 2 if end != -1 else content.rfind(b'\xff\xd9')
                 trailing_slice = content[eoi_idx + 2:eoi_idx + 2 + 4096] if eoi_idx != -1 else b""
 
             if eoi_idx == -1:
@@ -426,7 +515,8 @@ def inspect_file(filepath: Path | str) -> Dict[str, Any]:
             try:
                 with _map_file(fp) as content:
                     total_len = len(content)
-                    trailer_idx = content.rfind(b'\x3b')
+                    end = _gif_end(content)
+                    trailer_idx = end - 1 if end != -1 else content.rfind(b'\x3b')
                 if trailer_idx != -1 and total_len > trailer_idx + 1:
                     trailing_len = total_len - (trailer_idx + 1)
                     res.update({

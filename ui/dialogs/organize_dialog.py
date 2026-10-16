@@ -21,6 +21,7 @@ from core.workers   import RenameWorker
 from core.logger    import RenameLogger
 from utils.file_utils import RenameOperation
 from ui.widgets.progress_dialog import TaskProgressDialog
+from ui.theme import style
 
 
 class OrganizeDialog(QDialog):
@@ -78,7 +79,7 @@ class OrganizeDialog(QDialog):
 
         # ── Preview Table ──
         self.lbl_summary = QLabel(f"Preview sắp xếp ({len(self.files)} file):")
-        self.lbl_summary.setStyleSheet("color: #8e8e93; font-size: 11px; font-weight: 600;")
+        style(self.lbl_summary, "color: @text_secondary; font-size: 11px; font-weight: 600;")
         layout.addWidget(self.lbl_summary)
 
         self.table = QTableWidget()
@@ -95,7 +96,7 @@ class OrganizeDialog(QDialog):
 
 
         self.lbl_status = QLabel("")
-        self.lbl_status.setStyleSheet("color: #8e8e93; font-size: 11px;")
+        style(self.lbl_status, "color: @text_secondary; font-size: 11px;")
         layout.addWidget(self.lbl_status)
 
         # ── Buttons ──

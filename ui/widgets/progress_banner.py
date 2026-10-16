@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QLabel,
     QProgressBar, QPushButton, QFrame, QSizePolicy,
 )
+from ui.theme import style
 
 
 class ProgressBanner(QFrame):
@@ -32,36 +33,36 @@ class ProgressBanner(QFrame):
         self.hide()
 
     def _build_ui(self):
-        self.setStyleSheet("""
+        style(self, """
             QFrame#progressBanner {
-                background-color: #252528;
-                border-top: 1px solid #3a3a3c;
-                border-bottom: 1px solid #3a3a3c;
+                background-color: @bg_card;
+                border-top: 1px solid @stroke_control;
+                border-bottom: 1px solid @stroke_control;
                 padding: 6px 12px;
             }
             QLabel#lblTaskTitle {
-                color: #ffffff;
+                color: @text_primary;
                 font-weight: 600;
                 font-size: 9pt;
             }
             QLabel#lblDetails {
-                color: #8e8e93;
+                color: @text_secondary;
                 font-size: 8.5pt;
             }
             QProgressBar#mainProgress {
                 border: none;
                 border-radius: 3px;
-                background-color: #3a3a3c;
+                background-color: @fill_selected;
                 height: 6px;
                 text-align: right;
             }
             QProgressBar#mainProgress::chunk {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0a84ff, stop:1 #5ac8fa);
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 @accent, stop:1 @accent);
                 border-radius: 3px;
             }
             QPushButton#btnCancelTask {
-                background-color: #3a3a3c;
-                color: #ff453a;
+                background-color: @fill_selected;
+                color: @danger;
                 border: 1px solid #ff453a44;
                 border-radius: 5px;
                 font-size: 8.5pt;
@@ -70,7 +71,7 @@ class ProgressBanner(QFrame):
             }
             QPushButton#btnCancelTask:hover {
                 background-color: #ff453a22;
-                border-color: #ff453a;
+                border-color: @danger;
             }
         """)
 

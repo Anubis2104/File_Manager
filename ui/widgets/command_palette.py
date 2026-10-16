@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.widgets.svg_icons import get_svg_icon, get_svg_pixmap
+from ui.theme import style, tok
 
 
 @dataclass
@@ -49,12 +50,12 @@ class CommandItemWidget(QWidget):
         self.lbl_icon = QLabel()
         self.lbl_icon.setFixedSize(22, 22)
         self.lbl_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_icon.setPixmap(get_svg_pixmap(self.cmd.icon_name, "#38bdf8", 18))
+        self.lbl_icon.setPixmap(get_svg_pixmap(self.cmd.icon_name, tok("accent"), 18))
         lay.addWidget(self.lbl_icon)
 
         # Title
         self.lbl_title = QLabel(self.cmd.title)
-        self.lbl_title.setStyleSheet("color: #f1f5f9; font-size: 10pt; font-weight: 500; background: transparent;")
+        style(self.lbl_title, "color: @text_primary; font-size: 10pt; font-weight: 500; background: transparent;")
         self.lbl_title.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self.lbl_title.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         lay.addWidget(self.lbl_title)
@@ -62,8 +63,8 @@ class CommandItemWidget(QWidget):
         # Category pill
         lbl_cat = QLabel(self.cmd.category)
         lbl_cat.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl_cat.setStyleSheet(
-            "color: #94a3b8; background-color: #1e293b; border-radius: 4px; "
+        style(lbl_cat, 
+            "color: @text_secondary; background-color: @fill_hover; border-radius: 4px; "
             "padding: 2px 8px; font-size: 8pt; font-weight: 600;"
         )
         lay.addWidget(lbl_cat)
@@ -72,8 +73,8 @@ class CommandItemWidget(QWidget):
         if self.cmd.shortcut:
             lbl_key = QLabel(self.cmd.shortcut)
             lbl_key.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            lbl_key.setStyleSheet(
-                "color: #cbd5e1; background-color: #0f172a; border: 1px solid #334155; "
+            style(lbl_key, 
+                "color: @text_secondary; background-color: @bg_base; border: 1px solid @stroke_control; "
                 "border-radius: 4px; padding: 2px 8px; font-size: 8pt; font-family: 'Consolas', monospace;"
             )
             lay.addWidget(lbl_key)
@@ -108,10 +109,10 @@ class CommandPaletteDialog(QDialog):
 
         self.container = QFrame(self)
         self.container.setObjectName("paletteContainer")
-        self.container.setStyleSheet(
+        style(self.container, 
             "#paletteContainer { "
-            "   background-color: #0e1526; "
-            "   border: 1px solid #38bdf8; "
+            "   background-color: @bg_layer; "
+            "   border: 1px solid @accent; "
             "   border-radius: 12px; "
             "}"
         )
@@ -131,23 +132,23 @@ class CommandPaletteDialog(QDialog):
         search_bar.setSpacing(10)
 
         lbl_search_icon = QLabel()
-        lbl_search_icon.setPixmap(get_svg_pixmap("search", "#38bdf8", 20))
+        lbl_search_icon.setPixmap(get_svg_pixmap("search", tok("accent"), 20))
         search_bar.addWidget(lbl_search_icon)
 
         self.search_edit = QLineEdit()
         self.search_edit.setPlaceholderText("Gõ lệnh, tính năng hoặc đường dẫn cần mở (Ctrl+K)...")
-        self.search_edit.setStyleSheet(
+        style(self.search_edit, 
             "QLineEdit { "
-            "   background: transparent; border: none; color: #f8fafc; "
-            "   font-size: 11pt; font-weight: 500; selection-background-color: #0284c7; "
+            "   background: transparent; border: none; color: @text_primary; "
+            "   font-size: 11pt; font-weight: 500; selection-background-color: @accent; "
             "}"
         )
         self.search_edit.textChanged.connect(self._filter_commands)
         search_bar.addWidget(self.search_edit)
 
         lbl_esc = QLabel("Esc")
-        lbl_esc.setStyleSheet(
-            "color: #64748b; background-color: #1e293b; border-radius: 4px; "
+        style(lbl_esc, 
+            "color: @text_tertiary; background-color: @fill_hover; border-radius: 4px; "
             "padding: 2px 6px; font-size: 7.5pt; font-weight: bold;"
         )
         search_bar.addWidget(lbl_esc)
@@ -157,13 +158,13 @@ class CommandPaletteDialog(QDialog):
         # Divider line
         div = QFrame()
         div.setFixedHeight(1)
-        div.setStyleSheet("background-color: #1e293b;")
+        style(div, "background-color: @fill_hover;")
         container_lay.addWidget(div)
 
         # ── Results List ──
         self.list_widget = QListWidget()
         self.list_widget.setSpacing(3)
-        self.list_widget.setStyleSheet(
+        style(self.list_widget, 
             "QListWidget { "
             "   background-color: transparent; border: none; outline: none; "
             "} "
@@ -172,10 +173,10 @@ class CommandPaletteDialog(QDialog):
             "   border: 1px solid transparent; "
             "} "
             "QListWidget::item:selected { "
-            "   background-color: #1e293b; border: 1px solid #38bdf8; "
+            "   background-color: @fill_hover; border: 1px solid @accent; "
             "} "
             "QListWidget::item:hover:!selected { "
-            "   background-color: #162032; border: 1px solid #1e293b; "
+            "   background-color: @bg_layer; border: 1px solid @stroke_divider; "
             "}"
         )
         self.list_widget.itemDoubleClicked.connect(self._execute_selected)
@@ -184,13 +185,13 @@ class CommandPaletteDialog(QDialog):
         # ── Footer ──
         footer = QHBoxLayout()
         self.lbl_count = QLabel("0 lệnh khả dụng")
-        self.lbl_count.setStyleSheet("color: #64748b; font-size: 8pt;")
+        style(self.lbl_count, "color: @text_tertiary; font-size: 8pt;")
         footer.addWidget(self.lbl_count)
 
         footer.addStretch()
 
         lbl_hints = QLabel("[↑ / ↓] Điều hướng  •  [Enter] Thực thi  •  [Esc] Đóng")
-        lbl_hints.setStyleSheet("color: #64748b; font-size: 8pt;")
+        style(lbl_hints, "color: @text_tertiary; font-size: 8pt;")
         footer.addWidget(lbl_hints)
 
         container_lay.addLayout(footer)

@@ -1,0 +1,243 @@
+/* =====================================================================
+   FileManagerPro — Windows 11 File Explorer theme (template)
+   @token references are resolved by ui/theme.py for the active light/dark scheme.
+
+   Standard controls (QPushButton, QScrollBar, QMenu, QCheckBox, QComboBox,
+   QToolTip, QSpinBox...) intentionally have NO rules here: any stylesheet rule
+   makes Qt stop drawing them with the native "windows11" style.
+   ===================================================================== */
+
+/* ── Panes & splitters ── */
+QMainWindow {
+    background-color: @bg_chrome;               /* title + address rows without Mica */
+}
+QMainWindow[backdrop="system"] {
+    background: transparent;                     /* Mica Alt / Acrylic shows through */
+}
+#mainCentralWidget {
+    background-color: @bg_base;
+}
+/* Address row shares the active tab's layer, as in Explorer */
+QToolBar#commandBar {
+    background-color: @bg_base;
+    padding: 4px 8px;
+    border-bottom: 1px solid @stroke_control;   /* Explorer's divider above the views */
+}
+QToolBar#addressRow {
+    background-color: @layer_on_mica;
+    padding: 6px 8px;
+    border-bottom: 1px solid @stroke_control;   /* Explorer's divider above the command bar */
+}
+QSplitter::handle {
+    background-color: @stroke_divider;
+}
+QSplitter::handle:horizontal { width: 1px; }
+QSplitter::handle:vertical   { height: 1px; }
+
+/* ── Toolbars (address row, command bar) ── */
+QToolBar {
+    background-color: @bg_base;
+    border: none;
+    padding: 4px 8px;
+    spacing: 4px;
+}
+QToolBar QToolButton {
+    background-color: transparent;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 8px;
+    color: @text_primary;
+}
+QToolBar QToolButton:hover   { background-color: @fill_hover; }
+QToolBar QToolButton:pressed { background-color: @fill_pressed; color: @text_secondary; }
+QToolBar QToolButton:disabled { color: @text_disabled; }
+QToolBar::separator {
+    background-color: @stroke_divider;
+    width: 1px;
+    margin: 6px 4px;
+}
+
+/* ── Address & search boxes (Explorer: flat filled boxes, accent underline on focus) ── */
+QLineEdit#addressBar {
+    background-color: @control_on_mica;
+    border: 1px solid @stroke_control;
+    border-radius: 4px;
+    padding: 4px 10px;
+    color: @text_primary;
+    selection-background-color: @accent;
+    selection-color: @text_on_accent;
+}
+QLineEdit#addressBar:focus {
+    background-color: @bg_base;
+    border-bottom: 2px solid @accent;
+}
+QLineEdit#addressBar[invalid="true"] {
+    border-color: @danger;
+    border-bottom: 2px solid @danger;
+}
+/* The search QLineEdit sits inside #searchBox, which draws the box */
+QLineEdit#searchBar {
+    background: transparent;
+    border: none;
+    padding: 4px 10px;
+    color: @text_primary;
+    selection-background-color: @accent;
+    selection-color: @text_on_accent;
+}
+
+/* ── Top-level tabs (to be replaced by title-bar tabs in phase 1) ── */
+QTabWidget::pane {
+    border: none;
+    background-color: @bg_base;
+}
+QTabBar::tab {
+    background-color: transparent;
+    color: @text_secondary;
+    padding: 8px 16px;
+    border: none;
+    border-bottom: 2px solid transparent;
+}
+QTabBar::tab:selected {
+    color: @text_primary;
+    border-bottom: 2px solid @accent;
+}
+QTabBar::tab:hover:!selected {
+    color: @text_primary;
+    background-color: @fill_hover;
+    border-radius: 4px;
+}
+
+/* ── Item views: Explorer selection is a neutral fill, not an accent block ── */
+QTreeView, QListView, QTableView, QTableWidget {
+    background-color: @bg_base;
+    alternate-background-color: @bg_base;
+    border: none;
+    outline: none;
+    color: @text_primary;
+    selection-background-color: @fill_selected;
+    selection-color: @text_primary;
+    gridline-color: @stroke_divider;
+}
+QTreeView { show-decoration-selected: 1; }
+QTreeView::item {
+    padding: 4px 6px;
+}
+/* Paint the expand-arrow column like its row so a selected row reads as one block */
+QTreeView::branch:hover    { background-color: @fill_hover; }
+QTreeView::branch:selected { background-color: @fill_selected; }
+/* Styling ::branch disables Qt's native arrows, so supply theme-colored chevrons */
+QTreeView::branch:has-children:closed { image: url(@chevron_right); }
+QTreeView::branch:has-children:open   { image: url(@chevron_down); }
+QListView::item {
+    border-radius: 4px;
+    padding: 4px 6px;
+}
+QTableView::item, QTableWidget::item {
+    padding: 4px 8px;
+    border: none;
+}
+QTreeView::item:hover, QListView::item:hover,
+QTableView::item:hover, QTableWidget::item:hover {
+    background-color: @fill_hover;
+    color: @text_primary;
+}
+QTreeView::item:selected, QListView::item:selected,
+QTableView::item:selected, QTableWidget::item:selected {
+    background-color: @fill_selected;
+    color: @text_primary;
+}
+
+/* Column headers: plain text with thin dividers, like Explorer's Details view */
+QHeaderView {
+    background-color: @bg_base;
+    border: none;
+}
+QHeaderView::section {
+    background-color: @bg_base;
+    color: @text_secondary;
+    padding: 6px 8px;
+    border: none;
+    border-right: 1px solid @stroke_divider;
+}
+QHeaderView::section:hover { background-color: @fill_hover; }
+
+/* ── Status bar ── */
+QStatusBar {
+    background-color: @bg_layer;
+    color: @text_secondary;
+    border: none;
+}
+QStatusBar::item { border: none; }
+
+/* ── Buttons with semantic roles (plain QPushButton stays native) ── */
+QPushButton#primaryButton, QPushButton#accentButton {
+    background-color: @accent;
+    color: @text_on_accent;
+    border: 1px solid @accent;
+    border-radius: 4px;
+    padding: 6px 16px;
+}
+QPushButton#primaryButton:hover, QPushButton#accentButton:hover {
+    border-color: @text_primary;
+}
+QPushButton#primaryButton:disabled, QPushButton#accentButton:disabled {
+    background-color: @fill_control;
+    color: @text_disabled;
+    border-color: @stroke_control;
+}
+
+/* ── Cards (Inspector stats, duplicate groups) ── */
+QFrame#statCard, QFrame#dupGroupFrame {
+    background-color: @bg_card;
+    border: 1px solid @stroke_divider;
+    border-radius: 8px;
+}
+QFrame#statCard:hover, QFrame#dupGroupFrame:hover {
+    border-color: @stroke_control;
+}
+QFrame#dupGroupFrame { padding: 10px; }
+QLabel#statCardTitle {
+    color: @text_secondary;
+    font-size: 8.5pt;
+}
+QLabel#statCardValue {
+    color: @text_primary;
+    font-size: 16pt;
+    font-weight: 600;
+}
+QFrame#thumbFrame {
+    background-color: @bg_base;
+    border: 1px solid @stroke_divider;
+    border-radius: 6px;
+}
+QFrame#thumbFrameKeep {
+    background-color: @bg_base;
+    border: 2px solid @success;
+    border-radius: 6px;
+}
+QFrame#thumbFrameDelete {
+    background-color: @bg_base;
+    border: 2px solid @danger;
+    border-radius: 6px;
+}
+
+/* ── Overlays ── */
+QFrame#paletteContainer {
+    background-color: @bg_card;
+    border: 1px solid @stroke_control;
+    border-radius: 8px;
+}
+QFrame#quickLookContainer {
+    background-color: @bg_card;
+    border: 1px solid @stroke_control;
+    border-radius: 8px;
+}
+QFrame#dropzoneBox {
+    border: 2px dashed @stroke_control;
+    border-radius: 8px;
+    background-color: transparent;
+}
+QFrame#dropzoneBox[dragActive="true"] {
+    border-color: @accent;
+    background-color: @fill_hover;
+}

@@ -19,7 +19,10 @@ from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QLabel, QPushButton, QToolButton,
     QScrollArea, QFrame, QMenu, QApplication, QSizePolicy,
 )
-from ui.widgets.svg_icons import get_svg_icon, get_svg_pixmap
+from ui.shell import GLYPH_ADD, GLYPH_CLOSE, glyph_font as _glyph_font, shell_icon as _shell_icon
+from ui.theme import style
+
+TAB_HEIGHT = 26         # Explorer: 32 physical px at 125%
 
 
 class TabItemData:
@@ -54,69 +57,62 @@ class WorkspaceTabButton(QFrame):
         self._apply_style()
 
     def _build_ui(self):
-        self.setFixedHeight(32)
-        self.setMinimumWidth(110)
-        self.setMaximumWidth(220)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setObjectName("workspaceTab")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setFixedHeight(TAB_HEIGHT)
+        self.setMinimumWidth(140)
+        self.setMaximumWidth(240)
 
         lay = QHBoxLayout(self)
-        lay.setContentsMargins(8, 2, 4, 2)
-        lay.setSpacing(6)
+        lay.setContentsMargins(12, 0, 6, 0)
+        lay.setSpacing(8)
 
-        # Vector Folder Icon
+        # Shell icon (Pictures, Downloads, drives... look exactly like in Explorer)
         self.lbl_icon = QLabel()
         self.lbl_icon.setFixedSize(16, 16)
-        self.lbl_icon.setPixmap(get_svg_pixmap("folder", "#38bdf8" if self.is_active else "#94a3b8", 14))
         lay.addWidget(self.lbl_icon)
 
-        # Title
-        self.lbl_title = QLabel(self.data.title)
-        self.lbl_title.setStyleSheet("font-size: 8.5pt; font-weight: 500;")
+        self.lbl_title = QLabel()
         self.lbl_title.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         lay.addWidget(self.lbl_title)
 
-        # Close button
         self.btn_close = QToolButton()
-        self.btn_close.setIcon(get_svg_icon("close", "#94a3b8", 12, "#ef4444"))
-        self.btn_close.setIconSize(QSize(12, 12))
+        self.btn_close.setText(GLYPH_CLOSE)
+        self.btn_close.setFont(_glyph_font(9))
         self.btn_close.setToolTip("Đóng tab (Ctrl+W)")
-        self.btn_close.setFixedSize(18, 18)
-        self.btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_close.setStyleSheet(
-            "QToolButton { background: transparent; border: none; border-radius: 9px; padding: 0px; } "
-            "QToolButton:hover { background: #334155; }"
+        self.btn_close.setFixedSize(24, 24)
+        style(self.btn_close,
+            "QToolButton { background: transparent; border: none; border-radius: 4px; color: @text_primary; }"
+            "QToolButton:hover { background: @hover_on_mica; }"
         )
         self.btn_close.clicked.connect(lambda: self.close_clicked.emit(self.index))
         lay.addWidget(self.btn_close)
+        self.set_data(self.data)
 
     def set_active(self, active: bool):
         self.is_active = active
-        self.lbl_icon.setPixmap(get_svg_pixmap("folder", "#38bdf8" if self.is_active else "#94a3b8", 14))
         self._apply_style()
 
     def set_data(self, data: TabItemData):
         self.data = data
         self.lbl_title.setText(data.title)
         self.setToolTip(str(data.path))
+        self.lbl_icon.setPixmap(_shell_icon(data.path).pixmap(16, 16))
 
     def _apply_style(self):
+        # Explorer: the active tab is the same translucent layer as the address row
+        # below it, so the two read as one surface; inactive tabs sit on bare Mica.
         if self.is_active:
-            self.setStyleSheet(
-                "WorkspaceTabButton { background-color: #0e1526; border-top: 2px solid #38bdf8; "
-                "border-left: 1px solid #1e293b; border-right: 1px solid #1e293b; "
-                "border-bottom: 1px solid #0e1526; border-top-left-radius: 6px; "
-                "border-top-right-radius: 6px; }"
+            style(self,
+                "#workspaceTab { background: @layer_on_mica; border: none; "
+                "border-top-left-radius: 8px; border-top-right-radius: 8px; }"
             )
-            self.lbl_title.setStyleSheet("color: #f8fafc; font-size: 8.5pt; font-weight: 600;")
         else:
-            self.setStyleSheet(
-                "WorkspaceTabButton { background-color: #080c14; border-top: 2px solid transparent; "
-                "border-left: 1px solid transparent; border-right: 1px solid #1e293b; "
-                "border-bottom: 1px solid #1e293b; border-top-left-radius: 6px; "
-                "border-top-right-radius: 6px; }"
-                "WorkspaceTabButton:hover { background-color: #111827; }"
+            style(self,
+                "#workspaceTab { background: transparent; border: none; border-radius: 6px; }"
+                "#workspaceTab:hover { background: @hover_on_mica; }"
             )
-            self.lbl_title.setStyleSheet("color: #94a3b8; font-size: 8.5pt; font-weight: 500;")
+        style(self.lbl_title, "background: transparent; color: @text_primary;")
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
@@ -144,12 +140,14 @@ class WorkspaceTabBar(QWidget):
         self._build_ui()
 
     def _build_ui(self):
-        self.setFixedHeight(36)
-        self.setStyleSheet("background-color: #080c14; border-bottom: 1px solid #1e293b;")
+        # Lives in the title bar: transparent so the window's Mica backdrop shows through
+        self.setFixedHeight(TAB_HEIGHT + 6)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        style(self, "WorkspaceTabBar { background: transparent; }")
 
         main_lay = QHBoxLayout(self)
-        main_lay.setContentsMargins(4, 4, 4, 0)
-        main_lay.setSpacing(2)
+        main_lay.setContentsMargins(0, 6, 0, 0)
+        main_lay.setSpacing(4)
 
         # Scrollable container for tabs
         self.scroll = QScrollArea()
@@ -158,31 +156,35 @@ class WorkspaceTabBar(QWidget):
         self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.scroll.setFrameShape(QFrame.Shape.NoFrame)
         self.scroll.setStyleSheet("background: transparent; border: none;")
+        self.scroll.viewport().setAutoFillBackground(False)
 
         self.tab_container = QWidget()
         self.tab_container.setStyleSheet("background: transparent;")
         self.tabs_layout = QHBoxLayout(self.tab_container)
         self.tabs_layout.setContentsMargins(0, 0, 0, 0)
         self.tabs_layout.setSpacing(2)
-        self.tabs_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        self.tabs_layout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom)
 
         self.scroll.setWidget(self.tab_container)
         main_lay.addWidget(self.scroll)
 
         # New Tab Button [+]
         self.btn_new_tab = QToolButton()
-        self.btn_new_tab.setIcon(get_svg_icon("plus", "#94a3b8", 14, "#38bdf8"))
-        self.btn_new_tab.setIconSize(QSize(14, 14))
+        self.btn_new_tab.setText(GLYPH_ADD)
+        self.btn_new_tab.setFont(_glyph_font(11))
         self.btn_new_tab.setToolTip("Mở tab mới (Ctrl+T)")
-        self.btn_new_tab.setFixedSize(26, 26)
-        self.btn_new_tab.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_new_tab.setStyleSheet(
-            "QToolButton { background: transparent; border: 1px solid transparent; "
-            "border-radius: 5px; } "
-            "QToolButton:hover { background: #1e293b; border-color: #334155; }"
+        self.btn_new_tab.setFixedSize(28, 24)
+        style(self.btn_new_tab,
+            "QToolButton { background: transparent; border: none; border-radius: 6px; color: @text_primary; } "
+            "QToolButton:hover { background: @hover_on_mica; }"
         )
         self.btn_new_tab.clicked.connect(self._on_new_tab_clicked)
-        main_lay.addWidget(self.btn_new_tab)
+        main_lay.addWidget(self.btn_new_tab, 0, Qt.AlignmentFlag.AlignVCenter)
+
+    def sizeHint(self) -> QSize:
+        # Grow with the tabs so the title bar keeps the rest as drag space
+        tabs_w = sum(b.sizeHint().width() + 2 for b in self._buttons) if self._buttons else 0
+        return QSize(min(tabs_w, 1200) + 40, TAB_HEIGHT + 6)
 
     def add_tab(self, path: Optional[Path] = None, make_active: bool = True) -> int:
         """Add a new tab pointing to path (defaults to Home or current active path)."""
@@ -267,6 +269,7 @@ class WorkspaceTabBar(QWidget):
             btn.context_menu_requested.connect(self._show_context_menu)
             self.tabs_layout.addWidget(btn)
             self._buttons.append(btn)
+        self.updateGeometry()
 
     def _on_new_tab_clicked(self):
         current_path = self.tabs[self.active_index].path if self.tabs else Path.home()

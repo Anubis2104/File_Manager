@@ -808,3 +808,34 @@ class TrimOverlayWorker(QObject):
         except Exception as exc:
             self.error.emit(str(exc))
 
+
+
+# ─────────────────────────────────────────────────────────────
+# Paste (Explorer-style copy / move)
+# ─────────────────────────────────────────────────────────────
+
+class PasteWorker(QObject):
+    """Copy or move files/folders into a folder off the GUI thread (core.file_ops.paste)."""
+    progress  = pyqtSignal(int, int, str)    # (done, total, current name)
+    finished  = pyqtSignal(list)              # list[PasteResult]
+    error     = pyqtSignal(str)
+
+    def __init__(self, sources: list[Path], dest_dir: Path, move: bool, parent=None):
+        super().__init__(parent)
+        self.sources = list(sources)
+        self.dest_dir = dest_dir
+        self.move = move
+        self._cancel_event = threading.Event()
+
+    def cancel(self):
+        self._cancel_event.set()
+
+    def run(self):
+        from core.file_ops import paste
+        try:
+            results = paste(self.sources, self.dest_dir, self.move,
+                            on_progress=lambda d, t, n: self.progress.emit(d, t, n),
+                            cancel_check=self._cancel_event.is_set)
+            self.finished.emit(results)
+        except Exception as exc:
+            self.error.emit(str(exc))
