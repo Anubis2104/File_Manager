@@ -1,6 +1,6 @@
 # Kế hoạch: Giao diện giống Windows 11 File Explorer
 
-> Trạng thái: Gate 1 đã duyệt (2026-10-14) · **GĐ 0–5 xong + thanh trạng thái của GĐ 7** (2026-10-15) · tiếp theo: GĐ 6 (menu chuột phải), 7 (khung chi tiết), 8, 9
+> Trạng thái: Gate 1 đã duyệt (2026-10-14) · **GĐ 0–9 đã làm xong** (2026-10-15/16): menu chuột phải Win11 + Shell gốc (GĐ 6, `c1dc00a`), khung chi tiết/xem trước (GĐ 7, `f70c211`), trang Trùng lặp/Kiểm định (GĐ 8, `81d4178`), phím tắt + tên truy cập (GĐ 9, `286ed47`). Còn lại: duyệt thủ công trên máy thật (xem PR)
 > Quyết định đã chốt (/grill-me): giống tối đa nhưng giữ tính năng riêng · theme theo hệ thống (sáng/tối + accent) ·
 > tính năng riêng đặt trên command bar + menu ⋯ · menu chuột phải kiểu Win11 + "Show more options" gốc của Shell.
 
