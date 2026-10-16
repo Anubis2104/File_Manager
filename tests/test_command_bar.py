@@ -72,7 +72,8 @@ def test_layout_matches_explorer(window):
     assert window.toolBarArea(cb) == Qt.ToolBarArea.TopToolBarArea
     assert window.toolBarBreak(cb)                       # its own row, under the address row
     assert window.findChild(type(cb), "actionsToolbar") is None
-    assert not window.tab_widget.tabBar().isVisible()
+    from PyQt6.QtWidgets import QTabBar
+    assert not any(t.isVisible() for t in window.findChildren(QTabBar))   # no page tabs, like Explorer
     tools = [a.text() for a in cb.tools_menu.actions() if not a.isSeparator()]
     assert {"Đổi tên hàng loạt", "Tìm tệp trùng lặp", "Kiểm định & bảo mật"} <= set(tools)
 
@@ -203,11 +204,11 @@ def test_sort_menu_sorts_views(window, tmp_path):
 
 def test_tools_open_pages_and_navigation_returns_to_browser(window, tmp_path):
     window.act_duplicates.trigger()
-    assert window.tab_widget.currentIndex() == 1
+    assert window.current_page() == 1
     window.act_inspector.trigger()
-    assert window.tab_widget.currentIndex() == 2
+    assert window.current_page() == 2
     window._navigate_to(tmp_path)
-    assert window.tab_widget.currentIndex() == 0
+    assert window.current_page() == 0
 
 
 def test_ctrl_c_in_search_box_copies_text_not_files(window, tmp_path):

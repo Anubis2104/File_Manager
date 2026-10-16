@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Optional
 
 from PyQt6.QtCore import QEvent, QSize, Qt, pyqtSignal
-from PyQt6.QtGui import QKeyEvent
+from PyQt6.QtGui import QIcon, QKeyEvent
 from PyQt6.QtWidgets import (
     QApplication, QFrame, QHBoxLayout, QLabel, QLineEdit, QMenu, QSizePolicy, QStackedWidget,
     QToolBar, QToolButton, QWidget,
@@ -120,6 +120,24 @@ class BreadcrumbAddressBar(QWidget):
         self._rebuild_breadcrumbs(path)
         self.stack.setCurrentIndex(0)
 
+    def set_location(self, label: str, icon: QIcon):
+        """A page that is not a folder (like Explorer's Home / Gallery): icon > label."""
+        self._current_path = None
+        self.line_edit.setText(label)
+        self.line_edit.setProperty("invalid", False)
+        self._clear_crumbs()
+        self.lbl_icon.setPixmap(icon.pixmap(16, 16))
+        crumb = _flat_button(label)
+        crumb.setFixedHeight(ROW_CONTROL_HEIGHT - 6)
+        chevron = _flat_button(GLYPH_CHEVRON_RIGHT, 8)
+        chevron.setFixedSize(18, ROW_CONTROL_HEIGHT - 6)
+        chevron.setEnabled(False)
+        self.crumbs_layout.addWidget(crumb)
+        self.crumbs_layout.addWidget(chevron)
+        self._segments.append((crumb, chevron))
+        self.stack.setCurrentIndex(0)
+        self._fit_crumbs()
+
     def text(self) -> str:
         return self.line_edit.text()
 
@@ -154,12 +172,15 @@ class BreadcrumbAddressBar(QWidget):
             segs.append((part, acc))
         return segs
 
-    def _rebuild_breadcrumbs(self, path: Path):
+    def _clear_crumbs(self):
         while self.crumbs_layout.count():
             item = self.crumbs_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
         self._segments.clear()
+
+    def _rebuild_breadcrumbs(self, path: Path):
+        self._clear_crumbs()
 
         # Explorer shows the icon of the location root: "This PC" for drive paths
         icon = computer_icon() if path.drive else shell_icon(path)
@@ -324,6 +345,7 @@ class AppToolBar(QToolBar):
         self.setFloatable(False)
         self._history: deque[Path] = deque(maxlen=self.MAX_HISTORY)
         self._history_pos: int = -1
+        self.page_label: Optional[str] = None   # set while a non-folder page is shown
         self._build_actions()
 
     def _build_actions(self):
@@ -366,6 +388,11 @@ class AppToolBar(QToolBar):
 
     def push_path(self, path: Path):
         """Record a navigation in history and update address bar."""
+        if self._history_pos >= 0 and list(self._history)[self._history_pos] == path:
+            # Back / Forward / a refresh land here too: the entry is already current, and
+            # appending it again would cut off the Forward history
+            self._show_path(path)
+            return
         if self._history_pos < len(self._history) - 1:
             hist_list = list(self._history)
             self._history = deque(hist_list[:self._history_pos + 1], maxlen=self.MAX_HISTORY)
@@ -374,7 +401,30 @@ class AppToolBar(QToolBar):
         self._history_pos = len(self._history) - 1
         self._show_path(path)
 
+    def show_location(self, label: str, icon: QIcon):
+        """Show a page (duplicates / inspector) in the address row; Back / Up return to the folder."""
+        self.page_label = label
+        self.address_bar.set_location(label, icon)
+        self.search_box.edit.setPlaceholderText(f"Tìm trong {label}")
+        self.search_box.setEnabled(False)
+        has_folder = self._history_pos >= 0
+        self.btn_back.setEnabled(has_folder)
+        self.btn_up.setEnabled(has_folder)
+
+    def leave_page(self, emit: bool = False) -> bool:
+        """Show the current folder again instead of a page (not a history step).
+        emit: also ask the window to navigate there (Back / Up pressed on a page)."""
+        if self.page_label is None or self._history_pos < 0:
+            return False
+        path = list(self._history)[self._history_pos]
+        self._show_path(path)
+        if emit:
+            self.navigate_requested.emit(path)
+        return True
+
     def go_back(self):
+        if self.leave_page(emit=True):
+            return
         if self._history_pos > 0:
             self._history_pos -= 1
             path = list(self._history)[self._history_pos]
@@ -389,6 +439,8 @@ class AppToolBar(QToolBar):
             self.navigate_requested.emit(path)
 
     def go_up(self):
+        if self.leave_page(emit=True):
+            return
         if self._history_pos >= 0:
             current = list(self._history)[self._history_pos]
             parent = current.parent
@@ -404,8 +456,10 @@ class AppToolBar(QToolBar):
         self.search_bar.selectAll()
 
     def _show_path(self, path: Path):
+        self.page_label = None
         self.address_bar.set_path(path)
         self.search_box.set_folder(path)
+        self.search_box.setEnabled(True)
         self._update_nav_buttons()
 
     def _update_nav_buttons(self):

@@ -14,7 +14,7 @@ from PyQt6.QtCore  import Qt, QThread, QObject, pyqtSignal, QTimer, QSize
 from PyQt6.QtGui   import QIcon, QKeySequence, QAction, QFont, QPixmap
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QSplitter,
-    QVBoxLayout, QHBoxLayout, QTabWidget, QLabel,
+    QVBoxLayout, QHBoxLayout, QStackedWidget, QLabel,
     QLineEdit, QFileDialog, QMessageBox,
     QSizePolicy, QFrame, QToolButton, QMenu, QToolBar,
     QInputDialog,
@@ -217,19 +217,6 @@ class MainWindow(QMainWindow):
         root_layout.setContentsMargins(0, 0, 0, 0)
         root_layout.setSpacing(0)
 
-        # Pages: 0 = browser, 1 = duplicates, 2 = inspector. No visible tab strip:
-        # Explorer has none; the command bar's Tools menu opens pages 1-2.
-        self.tab_widget = QTabWidget()
-        self.tab_widget.setDocumentMode(True)
-        self.tab_widget.tabBar().hide()
-        root_layout.addWidget(self.tab_widget)
-
-        # ── Tab 1: File Explorer ──
-        browse_tab = QWidget()
-        browse_layout = QVBoxLayout(browse_tab)
-        browse_layout.setContentsMargins(0, 0, 0, 0)
-        browse_layout.setSpacing(0)
-
         # Feature 5: Multi-tab workspace bar (browser-style tabs)
         # Tabs live in the title bar (see _build_title_bar), like Explorer
         self.workspace_tabs = WorkspaceTabBar(self)
@@ -255,19 +242,24 @@ class MainWindow(QMainWindow):
         right_splitter.addWidget(self.right_dock)
         right_splitter.setSizes([850, 310])
 
-        self.h_splitter.addWidget(right_splitter)
-        self.h_splitter.setSizes([220, 1000])
-
-        browse_layout.addWidget(self.h_splitter)
-        self.tab_widget.addTab(browse_tab, "Trình duyệt tệp")
-
-        # ── Tab 2: Duplicates ──
+        # Pages beside the navigation pane, like Explorer's Home / Gallery:
+        # 0 = folder view (+ details pane), 1 = duplicates, 2 = inspector
+        from ui.panels.tree_panel import PAGES
+        from ui.widgets.page_header import page
+        self.pages = QStackedWidget()
+        self.pages.addWidget(right_splitter)
         self.dup_preview = DupPreviewPanel()
-        self.tab_widget.addTab(self.dup_preview, "Quản lý trùng lặp")
-
-        # ── Tab 3: Security & Inspector ──
         self.inspector_panel = InspectorPanel(self)
-        self.tab_widget.addTab(self.inspector_panel, "Kiểm định & Bảo mật")
+        self._page_info = {i: (label, glyph) for i, label, glyph, _ in PAGES}
+        self.pages.addWidget(page("Tìm tệp trùng lặp",
+                                  "Ảnh và video giống nhau trong thư mục đang mở (pHash hoặc DINOv2).",
+                                  self.dup_preview))
+        self.pages.addWidget(page("Kiểm định & bảo mật",
+                                  "Kiểm tra cấu trúc tệp, gọt dữ liệu thừa sau ảnh và quét mã độc.",
+                                  self.inspector_panel))
+        self.h_splitter.addWidget(self.pages)
+        self.h_splitter.setSizes([220, 1000])
+        root_layout.addWidget(self.h_splitter)
 
     # ─────────────────────────────────────────────
     # Status Bar
@@ -294,8 +286,8 @@ class MainWindow(QMainWindow):
             PaletteCommand("Hành động", "Chuyển đổi định dạng ảnh/video...", "convert", "Ctrl+Shift+C", self._open_convert_dialog),
             PaletteCommand("Hành động", "Xóa Metadata tệp (Bảo toàn ngày gốc)", "shield", "", self._strip_metadata),
             PaletteCommand("Hành động", "Xóa thư mục rỗng vào thùng rác", "trash", "", self._clean_empty_folders),
-            PaletteCommand("Hành động", "Quét tìm tệp trùng lặp (pHash / DINOv2)", "duplicate", "", lambda: (self.tab_widget.setCurrentIndex(1), self._start_dup_scan())),
-            PaletteCommand("Hành động", "Kiểm định Byte, Gọt Overlay & Quét rủi ro", "inspector", "", lambda: self.tab_widget.setCurrentIndex(2)),
+            PaletteCommand("Hành động", "Quét tìm tệp trùng lặp (pHash / DINOv2)", "duplicate", "", lambda: (self._show_page(1), self._start_dup_scan())),
+            PaletteCommand("Hành động", "Kiểm định Byte, Gọt Overlay & Quét rủi ro", "inspector", "", lambda: self._show_page(2)),
             PaletteCommand("Hành động", "Thống kê dung lượng & phân bổ tệp", "stats", "", self._open_stats_dialog),
             PaletteCommand("Hành động", "Khôi phục tên gốc từ Log...", "refresh", "", self._open_restore_dialog),
             PaletteCommand("Hành động", "Tự động sắp xếp tệp theo ngày/loại...", "folder_plus", "", self._open_organize_dialog),
@@ -338,6 +330,7 @@ class MainWindow(QMainWindow):
         self.content_panel.file_activated.connect(self._open_file_default)
         self.content_panel.selection_changed.connect(self._on_content_selection)
         self.content_panel.context_menu_requested.connect(self._show_content_context_menu)
+        self.tree_panel.page_selected.connect(self._show_page)
         self.right_dock.queue_completed.connect(self._refresh)
         self.right_dock.queue_shown.connect(self._on_queue_shown)
         # Browser-style tabs signals
@@ -443,7 +436,7 @@ class MainWindow(QMainWindow):
         menu.addSeparator()
 
         act_dup = menu.addAction(get_svg_icon("duplicate", tok("accent"), 16), "Quét tìm trùng lặp cây thư mục này...")
-        act_dup.triggered.connect(lambda: (self._navigate_to(folder_path), self.tab_widget.setCurrentIndex(1), self._start_dup_scan()))
+        act_dup.triggered.connect(lambda: (self._navigate_to(folder_path), self._show_page(1), self._start_dup_scan()))
 
         act_meta = menu.addAction(get_svg_icon("shield", tok("accent"), 16), "Xóa Metadata các tệp trong thư mục...")
         act_meta.triggered.connect(lambda: self._strip_metadata(target_folder=folder_path))
@@ -720,8 +713,19 @@ class MainWindow(QMainWindow):
     # ─────────────────────────────────────────────
 
     def _show_page(self, index: int):
-        if self.tab_widget.currentIndex() != index:
-            self.tab_widget.setCurrentIndex(index)
+        if self.pages.currentIndex() != index:
+            self.pages.setCurrentIndex(index)
+        if index:
+            from ui.widgets.command_bar import glyph_icon
+            label, glyph = self._page_info[index]
+            self.toolbar.show_location(label, glyph_icon(glyph))
+            self.tree_panel.select_page(index)
+        elif self.toolbar.leave_page() and self.content_panel.current_dir is not None:
+            self.tree_panel.expand_to(self.content_panel.current_dir)   # un-highlight the page entry
+        self._update_command_state()
+
+    def current_page(self) -> int:
+        return self.pages.currentIndex()
 
     def _active_view(self):
         cp = self.content_panel
@@ -729,10 +733,13 @@ class MainWindow(QMainWindow):
 
     def _update_command_state(self):
         from ui import clipboard
+        on_folder = self.pages.currentIndex() == 0      # file verbs don't apply to the tool pages
         self.command_bar.update_state(
-            selection_count=len(self.content_panel.get_selected_paths()),
-            can_paste=clipboard.has_files() and self.content_panel.current_dir is not None,
+            selection_count=len(self.content_panel.get_selected_paths()) if on_folder else 0,
+            can_paste=on_folder and clipboard.has_files() and self.content_panel.current_dir is not None,
         )
+        for btn in (self.command_bar.btn_sort, self.command_bar.btn_view, self.command_bar.btn_details):
+            btn.setEnabled(on_folder)
 
     def _clipboard_put(self, cut: bool):
         from ui import clipboard
@@ -1033,7 +1040,7 @@ class MainWindow(QMainWindow):
 
     def _open_queue_rename_dialog(self, target_folder: Optional[Path] = None):
         folder = target_folder or self.content_panel.current_dir or self.tree_panel.get_selected_path() or Path.home()
-        self.tab_widget.setCurrentIndex(0)
+        self._show_page(0)
         self.right_dock.open_queue_with_folder(folder)
         from core.app_logcat import logcat
         logcat.i("UI:QueueDock", f"Chuyển đổi thanh bên phải thành Hàng đợi Đổi tên: {folder}")
@@ -1280,7 +1287,7 @@ class MainWindow(QMainWindow):
         self.dup_preview.load_groups(groups)
         self.dup_preview.btn_scan.setEnabled(True)
         # Switch to Duplicates tab
-        self.tab_widget.setCurrentIndex(1)
+        self._show_page(1)
 
     def _open_logcat_dialog(self):
         from core.app_logcat import logcat

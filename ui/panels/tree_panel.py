@@ -3,6 +3,7 @@ ui/panels/tree_panel.py
 Explorer navigation pane:
 
     Trang chủ                 (the user's profile folder)
+    Trùng lặp / Kiểm định     FileManagerPro's pages (like Explorer's Gallery)
   > OneDrive
   ───────────
     Desktop            📌     Quick access pins (Explorer's defaults; pin / unpin via
@@ -22,7 +23,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from PyQt6.QtCore import QRect, QSize, Qt, pyqtSignal
+from PyQt6.QtCore import QModelIndex, QRect, QSize, Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QAbstractItemView, QStyle, QStyledItemDelegate, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
@@ -34,8 +35,11 @@ from ui.shell import (
 from ui.theme import qcolor, style
 
 ROLE_PATH = Qt.ItemDataRole.UserRole           # Path of a folder item (None for "This PC")
-ROLE_KIND = Qt.ItemDataRole.UserRole + 1       # "folder" | "pinned" | "separator" | "computer"
+ROLE_KIND = Qt.ItemDataRole.UserRole + 1       # "folder" | "pinned" | "separator" | "computer" | "page"
 ROLE_LOADED = Qt.ItemDataRole.UserRole + 2     # children already listed
+ROLE_PAGE = Qt.ItemDataRole.UserRole + 3       # main-window page index of a "page" item
+PAGES = ((1, "Trùng lặp", "\uE8C8", "Tìm và dọn tệp trùng lặp"),
+         (2, "Kiểm định", "\uEA18", "Kiểm định byte, overlay và mã độc"))
 GLYPH_PIN = ""
 ROW_HEIGHT = 26                                 # Explorer: 32 physical px at 125%
 MAX_CHILDREN = 2000
@@ -77,6 +81,7 @@ class TreePanel(QWidget):
     """Explorer-style navigation pane. Emits `folder_selected` on click."""
 
     folder_selected = pyqtSignal(Path)
+    page_selected = pyqtSignal(int)                            # PAGES index (1 = duplicates, 2 = inspector)
     folder_context_menu_requested = pyqtSignal(object, Path)  # (global_pos, folder_path)
 
     def __init__(self, parent=None, settings_path: Optional[Path] = None):
@@ -118,6 +123,18 @@ class TreePanel(QWidget):
         self.tree.clear()
         home = Path.home()
         self._add_folder(None, "Trang chủ", home, kind="folder", expandable=False)
+        from ui.widgets.command_bar import glyph_icon
+        self.page_items: dict[int, QTreeWidgetItem] = {}
+        for index, label, glyph, tip in PAGES:
+            item = QTreeWidgetItem([label])
+            item.setIcon(0, glyph_icon(glyph))
+            item.setToolTip(0, tip)
+            item.setData(0, ROLE_KIND, "page")
+            item.setData(0, ROLE_PAGE, index)
+            item.setData(0, ROLE_PATH, None)
+            item.setChildIndicatorPolicy(QTreeWidgetItem.ChildIndicatorPolicy.DontShowIndicator)
+            self.tree.addTopLevelItem(item)
+            self.page_items[index] = item
         od = onedrive_root()
         if od is not None:
             # Personal OneDrive folder is just "OneDrive"; Explorer labels it "... - Personal"
@@ -197,7 +214,9 @@ class TreePanel(QWidget):
         if self._syncing:
             return
         path = item.data(0, ROLE_PATH)
-        if path is not None and Path(path).is_dir():
+        if item.data(0, ROLE_KIND) == "page":
+            self.page_selected.emit(int(item.data(0, ROLE_PAGE)))
+        elif path is not None and Path(path).is_dir():
             self.folder_selected.emit(Path(path))
         elif item.data(0, ROLE_KIND) == "computer":
             item.setExpanded(not item.isExpanded())
@@ -209,6 +228,17 @@ class TreePanel(QWidget):
         path = item.data(0, ROLE_PATH)
         if path is not None and Path(path).is_dir():
             self.folder_context_menu_requested.emit(self.tree.viewport().mapToGlobal(pos), Path(path))
+
+    def select_page(self, index: int):
+        """Highlight a page entry (the window switched pages some other way)."""
+        item = self.page_items.get(index)
+        if item is None:
+            return
+        self._syncing = True
+        try:
+            self.tree.setCurrentItem(item)
+        finally:
+            self._syncing = False
 
     def get_selected_path(self) -> Optional[Path]:
         item = self.tree.currentItem()
@@ -227,6 +257,7 @@ class TreePanel(QWidget):
                 self.tree.scrollToItem(target)
             else:
                 self.tree.clearSelection()
+                self.tree.setCurrentIndex(QModelIndex())     # no stale highlight (e.g. a page entry)
         finally:
             self._syncing = False
 
