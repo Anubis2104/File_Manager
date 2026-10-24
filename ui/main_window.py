@@ -78,11 +78,39 @@ class MainWindow(QMainWindow):
         self._connect_signals()
         self._setup_shortcuts()
         self._load_app_state()
+        self._load_settings()
         self._apply_appearance_settings()
 
         init_dir = self._resolve_initial_directory()
         self.workspace_tabs.add_tab(init_dir)
         self._navigate_to(init_dir)
+
+    def _load_settings(self):
+        """Load and wire system configuration from config/settings.json."""
+        try:
+            from ui.dialogs.settings_dialog import load_settings
+            self.cfg = load_settings()
+        except Exception:
+            self.cfg = {}
+
+        dup_cfg = self.cfg.get("duplicate", {})
+        self.phash_threshold = dup_cfg.get("phash_threshold", 10)
+        self.embedding_threshold = dup_cfg.get("embedding_threshold", 0.95)
+        self.dinov2_model = dup_cfg.get("dinov2_model", "dinov2_vits14")
+        self.batch_size = dup_cfg.get("batch_size", 128)
+        self.default_engine = dup_cfg.get("default_engine", "both")
+
+        perf_cfg = self.cfg.get("performance", {})
+        self.scanner_workers = perf_cfg.get("scanner_workers", 8)
+        self.use_cuda = perf_cfg.get("use_cuda", True)
+
+        tools_cfg = self.cfg.get("tools", {})
+        self.exiftool_path = tools_cfg.get("exiftool_path", "exiftool.exe")
+
+        # Sync dup engine combo box
+        if hasattr(self, "dup_preview") and hasattr(self.dup_preview, "engine_combo"):
+            combo_map = {"phash": 0, "dinov2": 1, "both": 2}
+            self.dup_preview.engine_combo.setCurrentIndex(combo_map.get(self.default_engine, 2))
 
     def _resolve_initial_directory(self) -> Path:
         """Resolve starting directory from config/settings.json or fallback to Path.home()."""
@@ -1084,6 +1112,7 @@ class MainWindow(QMainWindow):
         from ui.dialogs.settings_dialog import SettingsDialog
         dlg = SettingsDialog(parent=self)
         if dlg.exec():
+            self._load_settings()
             self._apply_appearance_settings()
 
     def _strip_metadata(self, target_folder: Optional[Path] = None):
@@ -1244,6 +1273,11 @@ class MainWindow(QMainWindow):
         worker = DupScanWorker(
             image_paths=image_paths,
             engine_mode=mode,
+            phash_threshold=getattr(self, "phash_threshold", 10),
+            embedding_threshold=getattr(self, "embedding_threshold", 0.95),
+            model_name=getattr(self, "dinov2_model", "dinov2_vits14"),
+            batch_size=getattr(self, "batch_size", 128),
+            device="cuda" if getattr(self, "use_cuda", True) else "cpu",
         )
         thread = QThread(self)
         self._running_threads.add(thread)

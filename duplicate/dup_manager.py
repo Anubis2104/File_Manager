@@ -49,11 +49,13 @@ class DupManager:
         embedding_threshold: float = 0.95,
         model_name: str = "dinov2_vits14",
         batch_size: int = 32,
+        device: str = "cuda",            # 'cuda' | 'cpu' (performance.use_cuda)
     ):
         self.phash_threshold = phash_threshold
         self.embedding_threshold = embedding_threshold
         self.model_name = model_name
         self.batch_size = batch_size
+        self.device = device
 
         self._phash_engine = None
         self._embed_engine = None
@@ -71,7 +73,7 @@ class DupManager:
         """Run pHash engine only. Returns DupGroup list."""
         if not self._phash_engine:
             from duplicate.phash_engine import PHashEngine
-            self._phash_engine = PHashEngine()
+            self._phash_engine = PHashEngine(device=self.device)
 
         if on_progress:
             on_progress(0, len(image_paths), "Bắt đầu tính pHash...")
@@ -109,6 +111,7 @@ class DupManager:
             from duplicate.embedding_engine import EmbeddingEngine
             self._embed_engine = EmbeddingEngine(
                 model_name=self.model_name,
+                device=self.device,
                 batch_size=self.batch_size,
             )
 

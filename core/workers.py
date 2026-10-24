@@ -242,11 +242,13 @@ class DupScanWorker(QObject):
         embedding_threshold: float = 0.95,
         model_name: str = "dinov2_vits14",
         batch_size: int = 32,
+        device: str = "cuda",            # 'cuda' | 'cpu'
         parent=None,
     ):
         super().__init__(parent)
         self.image_paths = image_paths
         self.engine_mode = engine_mode
+        self.device = device
         self.phash_threshold = phash_threshold
         self.embedding_threshold = embedding_threshold
         self.model_name = model_name
@@ -270,6 +272,7 @@ class DupScanWorker(QObject):
                 embedding_threshold=self.embedding_threshold,
                 model_name=self.model_name,
                 batch_size=self.batch_size,
+                device=self.device,
             )
 
             def _prog(cur, tot, msg=""):

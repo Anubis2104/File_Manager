@@ -109,7 +109,9 @@ class AppStatusBar(QStatusBar):
     def set_cuda_info(self, info_str: str):
         if "Not available" in info_str or "missing" in info_str:
             self.lbl_cuda.setText("CPU")
-            self.lbl_cuda.setToolTip("Không có GPU CUDA — tìm trùng lặp bằng AI chạy trên CPU")
+            tip = "Không có GPU CUDA — tìm trùng lặp bằng AI chạy trên CPU"
+            reason = info_str.partition(" — ")[2]
+            self.lbl_cuda.setToolTip(f"{tip}\n{reason}" if reason else tip)
         else:
             name_part = info_str.split("|")[0].replace("CUDA:", "").strip()
             self.lbl_cuda.setText(f"GPU: {name_part}")
