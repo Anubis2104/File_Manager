@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
 from core.converter import ImageConverter, VideoConverter, SUPPORTED_IMAGE_EXTS, VIDEO_EXTS
 from utils.file_utils import classify_extension
 from ui.widgets.progress_dialog import TaskProgressDialog
+from ui.theme import style
 
 
 IMAGE_FORMATS = [".jpg", ".png", ".webp", ".bmp", ".tiff", ".gif"]
@@ -117,7 +118,7 @@ class ConvertDialog(QDialog):
         in_row = QHBoxLayout()
         in_row.addWidget(QLabel("File nguồn:"))
         self.lbl_count = QLabel("0 file")
-        self.lbl_count.setStyleSheet("color: #0a84ff; font-weight: 600;")
+        style(self.lbl_count, "color: @accent; font-weight: 600;")
         in_row.addWidget(self.lbl_count)
         in_row.addStretch()
 
@@ -177,7 +178,7 @@ class ConvertDialog(QDialog):
 
 
         self.lbl_status = QLabel("")
-        self.lbl_status.setStyleSheet("color: #8e8e93; font-size: 11px;")
+        style(self.lbl_status, "color: @text_secondary; font-size: 11px;")
         layout.addWidget(self.lbl_status)
 
         # ── Buttons ──

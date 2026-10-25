@@ -24,43 +24,28 @@ from utils.date_utils import (
     extract_best_date, parse_exif_date, format_date_for_rename,
     resolve_exiftool_exe, _test_exiftool_binary, run_exiftool_utf8
 )
+from utils.media_info import resolve_ffmpeg_exe, resolve_ffprobe_exe
 from utils.safe_log import log_swallowed, safe_log
+
+
+__all__ = [
+    "FFMPEG_CONTAINER_EXTS",
+    "resolve_ffmpeg_exe",
+    "resolve_ffprobe_exe",
+    "strip_video_metadata_with_ffmpeg",
+    "write_video_metadata_with_ffmpeg",
+    "strip_jpeg_lossless_in_ram",
+    "strip_png_lossless_in_ram",
+    "ExifToolDaemon",
+    "MetadataEngine",
+    "ArgfileMetadataEngine",
+    "resolve_exiftool_exe",
+]
 
 
 FFMPEG_CONTAINER_EXTS: frozenset[str] = frozenset({
     ".mkv", ".webm", ".mka", ".mks", ".avi"
 })
-
-_RESOLVED_FFMPEG: Optional[str] = None
-
-
-def resolve_ffmpeg_exe(custom_exe: str = "ffmpeg") -> str:
-    """Find a functional ffmpeg binary from system PATH, project directory, or winget."""
-    global _RESOLVED_FFMPEG
-    if _RESOLVED_FFMPEG:
-        return _RESOLVED_FFMPEG
-
-    import shutil
-    candidates = [
-        custom_exe,
-        "ffmpeg",
-        str(Path(__file__).parent.parent / "ffmpeg.exe"),
-        str(Path(__file__).parent.parent / "utils" / "ffmpeg.exe"),
-        r"C:\Tools\ffmpeg\bin\ffmpeg.exe",
-    ]
-    for c in candidates:
-        if not c:
-            continue
-        which_path = shutil.which(c)
-        if which_path and os.path.isfile(which_path):
-            _RESOLVED_FFMPEG = which_path
-            return which_path
-        if os.path.isfile(c):
-            _RESOLVED_FFMPEG = str(Path(c).resolve())
-            return _RESOLVED_FFMPEG
-
-    _RESOLVED_FFMPEG = "ffmpeg"
-    return "ffmpeg"
 
 
 def strip_video_metadata_with_ffmpeg(filepath: Path | str, ffmpeg_exe: Optional[str] = None) -> tuple[bool, str]:
@@ -345,6 +330,71 @@ def strip_png_lossless_in_ram(filepath: Path | str) -> tuple[bool, str]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Child-process lifetime: a Windows job object that kills its members when the
+# last handle closes, i.e. when this Python process ends in any way (normal exit,
+# crash, os._exit). ExifTool.exe is a launcher, so it does not notice its parent
+# going away on its own: without this, every app run left an orphan behind.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_kill_on_exit_job = None
+
+
+def _bind_child_to_this_process(proc: subprocess.Popen) -> bool:
+    """Put `proc` (and the processes it starts) into a kill-on-close job. Windows only."""
+    global _kill_on_exit_job
+    if sys.platform != "win32":
+        return False
+    import ctypes
+    from ctypes import wintypes
+    k32 = ctypes.windll.kernel32
+    k32.CreateJobObjectW.restype = wintypes.HANDLE
+    k32.OpenProcess.restype = wintypes.HANDLE
+    try:
+        if _kill_on_exit_job is None:
+            job = k32.CreateJobObjectW(None, None)
+            if not job:
+                return False
+
+            class IO_COUNTERS(ctypes.Structure):
+                _fields_ = [(n, ctypes.c_ulonglong) for n in (
+                    "ReadOperationCount", "WriteOperationCount", "OtherOperationCount",
+                    "ReadTransferCount", "WriteTransferCount", "OtherTransferCount")]
+
+            class BASIC_LIMIT(ctypes.Structure):
+                _fields_ = [("PerProcessUserTimeLimit", ctypes.c_longlong),
+                            ("PerJobUserTimeLimit", ctypes.c_longlong),
+                            ("LimitFlags", wintypes.DWORD),
+                            ("MinimumWorkingSetSize", ctypes.c_size_t),
+                            ("MaximumWorkingSetSize", ctypes.c_size_t),
+                            ("ActiveProcessLimit", wintypes.DWORD),
+                            ("Affinity", ctypes.c_size_t),
+                            ("PriorityClass", wintypes.DWORD),
+                            ("SchedulingClass", wintypes.DWORD)]
+
+            class EXTENDED_LIMIT(ctypes.Structure):
+                _fields_ = [("BasicLimitInformation", BASIC_LIMIT), ("IoInfo", IO_COUNTERS),
+                            ("ProcessMemoryLimit", ctypes.c_size_t), ("JobMemoryLimit", ctypes.c_size_t),
+                            ("PeakProcessMemoryUsed", ctypes.c_size_t), ("PeakJobMemoryUsed", ctypes.c_size_t)]
+
+            info = EXTENDED_LIMIT()
+            info.BasicLimitInformation.LimitFlags = 0x2000   # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+            if not k32.SetInformationJobObject(wintypes.HANDLE(job), 9, ctypes.byref(info), ctypes.sizeof(info)):
+                k32.CloseHandle(wintypes.HANDLE(job))   # 9 = JobObjectExtendedLimitInformation
+                return False
+            _kill_on_exit_job = job                  # handle intentionally kept open until exit
+        h = k32.OpenProcess(0x0001 | 0x0100, False, proc.pid)   # PROCESS_TERMINATE | PROCESS_SET_QUOTA
+        if not h:
+            return False
+        try:
+            return bool(k32.AssignProcessToJobObject(wintypes.HANDLE(_kill_on_exit_job), wintypes.HANDLE(h)))
+        finally:
+            k32.CloseHandle(h)
+    except Exception as exc:
+        safe_log("w", "ExifToolDaemon", f"Khong gan duoc job object: {exc}")
+        return False
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # ExifToolDaemon — giữ tiến trình ExifTool sống để tránh cold-start 500ms/file
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -400,6 +450,7 @@ class ExifToolDaemon:
                 encoding="utf-8",
                 errors="replace",
             )
+            _bind_child_to_this_process(self._proc)
             # Fresh queue per process: lines from a killed process can never leak into the next one
             self._lines = queue.Queue()
             threading.Thread(
@@ -547,9 +598,22 @@ def _get_global_daemon(exiftool_exe: str) -> Optional[ExifToolDaemon]:
             d = ExifToolDaemon(exiftool_exe)
             if d.start():
                 _global_daemon = d
+                _register_daemon_shutdown()
             else:
                 _global_daemon = None
     return _global_daemon
+
+
+_shutdown_registered = False
+
+
+def _register_daemon_shutdown() -> None:
+    """Close the shared daemon politely on normal interpreter exit (the job object covers crashes)."""
+    global _shutdown_registered
+    if not _shutdown_registered:
+        import atexit
+        atexit.register(lambda: _global_daemon.close() if _global_daemon is not None else None)
+        _shutdown_registered = True
 
 
 class MetadataEngine:
@@ -586,6 +650,16 @@ class MetadataEngine:
         except (FileNotFoundError, OSError):
             self._exiftool_available = False
         return self._exiftool_available
+
+    def is_ffmpeg_available(self) -> bool:
+        """Check if a functional ffmpeg binary is available."""
+        ffmpeg_bin = resolve_ffmpeg_exe()
+        return bool(ffmpeg_bin and os.path.isfile(ffmpeg_bin))
+
+    def is_ffprobe_available(self) -> bool:
+        """Check if a functional ffprobe binary is available."""
+        ffprobe_bin = resolve_ffprobe_exe()
+        return bool(ffprobe_bin and os.path.isfile(ffprobe_bin))
 
     # ─────────────────────────────────────────────
     # Read metadata
@@ -734,6 +808,36 @@ class MetadataEngine:
         except Exception as exc:
             return False, str(exc)
 
+    @staticmethod
+    def _restore_date_with_piexif(path: Path, dt: datetime) -> tuple[bool, str]:
+        """Lossless in-memory EXIF date write for JPEG/TIFF/WebP when ExifTool subprocess is unavailable."""
+        ext = path.suffix.lower()
+        if ext not in (".jpg", ".jpeg", ".tif", ".tiff", ".webp"):
+            return False, "Unsupported extension for piexif fallback."
+        try:
+            import piexif
+            dt_str = dt.strftime("%Y:%m:%d %H:%M:%S").encode("ascii")
+            exif_dict: dict = {"0th": {}, "Exif": {}, "GPS": {}, "1st": {}, "thumbnail": None}
+            try:
+                loaded = piexif.load(str(path))
+                if isinstance(loaded, dict):
+                    exif_dict.update(loaded)
+            except Exception as _bare_exc:
+                log_swallowed("METADATA", _bare_exc)
+            exif_dict.setdefault("0th", {})[piexif.ImageIFD.DateTime] = dt_str
+            exif_dict.setdefault("Exif", {})[piexif.ExifIFD.DateTimeOriginal] = dt_str
+            exif_dict.setdefault("Exif", {})[piexif.ExifIFD.DateTimeDigitized] = dt_str
+            exif_bytes = piexif.dump(exif_dict)
+            piexif.insert(exif_bytes, str(path))
+            try:
+                ts = dt.timestamp()
+                os.utime(path, (ts, ts))
+            except Exception as _bare_exc:
+                log_swallowed("METADATA", _bare_exc)
+            return True, ""
+        except Exception as exc:
+            return False, str(exc)
+
     def restore_date_to_metadata(self, path: Path, dt: datetime) -> tuple[bool, str]:
         """
         Write creation date back into a file after metadata wipe.
@@ -744,6 +848,9 @@ class MetadataEngine:
             return write_video_metadata_with_ffmpeg(path, tags={}, dt=dt)
 
         if not self.is_exiftool_available():
+            ok_pi, _ = self._restore_date_with_piexif(path, dt)
+            if ok_pi:
+                return True, ""
             # Fallback: still preserve filesystem timestamp
             try:
                 ts = dt.timestamp()
@@ -792,6 +899,11 @@ class MetadataEngine:
             if r.returncode == 0:
                 return True, ""
             return False, r.stderr.strip()
+        except OSError as exc:             # ExifTool present but cannot be launched
+            ok_pi, _ = self._restore_date_with_piexif(path, dt)
+            if ok_pi:
+                return True, ""
+            return False, str(exc)
         except Exception as exc:
             return False, str(exc)
 

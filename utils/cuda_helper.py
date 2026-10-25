@@ -8,6 +8,8 @@ import logging
 from dataclasses import dataclass
 from typing import Optional
 
+from utils.safe_log import safe_log
+
 logger = logging.getLogger(__name__)
 
 
@@ -20,10 +22,12 @@ class CudaInfo:
     compute_capability: tuple[int, int]
     torch_version: str
     cuda_version: str
+    reason: str = ""  # why CUDA is unavailable; empty when available
 
     def __str__(self) -> str:
         if not self.available:
-            return "CUDA: Not available (using CPU)"
+            suffix = f" — {self.reason}" if self.reason else ""
+            return f"CUDA: Not available (using CPU){suffix}"
         return (
             f"CUDA: {self.device_name} | "
             f"{self.total_memory_gb:.1f} GB | "
@@ -53,6 +57,7 @@ def get_cuda_info(device_id: int = 0) -> CudaInfo:
                 compute_capability=(0, 0),
                 torch_version=torch.__version__,
                 cuda_version="N/A",
+                reason=_cpu_fallback_reason(torch),
             )
         else:
             props = torch.cuda.get_device_properties(device_id)
@@ -67,20 +72,43 @@ def get_cuda_info(device_id: int = 0) -> CudaInfo:
                 torch_version=torch.__version__,
                 cuda_version=torch.version.cuda or "N/A",
             )
-    except (ImportError, OSError, Exception):
-        logger.debug("PyTorch not installed or blocked by OS — using CPU mode.")
-        _cuda_info = CudaInfo(
-            available=False,
-            device_id=-1,
-            device_name="CPU (PyTorch unavailable)",
-            total_memory_gb=0.0,
-            compute_capability=(0, 0),
-            torch_version="N/A",
-            cuda_version="N/A",
-        )
+    except ImportError:
+        _cuda_info = _unavailable("PyTorch not installed (pip install -r requirements-ai.txt)")
+    except Exception as exc:  # DLL load failure, CUDA init error, ...
+        _cuda_info = _unavailable(f"PyTorch failed to initialise CUDA: {exc}")
 
-    logger.info(str(_cuda_info))
+    if _cuda_info.available:
+        logger.info(str(_cuda_info))
+    else:
+        logger.warning(str(_cuda_info))
+        safe_log("w", "CUDA", str(_cuda_info))
     return _cuda_info
+
+
+def _unavailable(reason: str) -> CudaInfo:
+    return CudaInfo(
+        available=False,
+        device_id=-1,
+        device_name="CPU (PyTorch unavailable)",
+        total_memory_gb=0.0,
+        compute_capability=(0, 0),
+        torch_version="N/A",
+        cuda_version="N/A",
+        reason=reason,
+    )
+
+
+def _cpu_fallback_reason(torch) -> str:
+    """Explain why torch.cuda.is_available() is False."""
+    if torch.version.cuda is None:
+        return (
+            f"PyTorch {torch.__version__} is a CPU-only build — reinstall from "
+            "https://download.pytorch.org/whl/cu126 (Run_FileManagerPro.bat does this automatically)"
+        )
+    return (
+        f"PyTorch built for CUDA {torch.version.cuda} but no usable GPU — "
+        "check the NVIDIA driver is installed and up to date"
+    )
 
 
 def get_torch_device(preferred: str = "cuda", device_id: int = 0):

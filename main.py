@@ -53,9 +53,14 @@ def main():
     AppLogcat.instance().install(app)
 
 
-    # Default font
-    font = QFont("Segoe UI", 10)
+    # Explorer uses Segoe UI Variable at 9pt
+    font = QFont("Segoe UI Variable Text", 9)
+    font.setStyleHint(QFont.StyleHint.SansSerif)
     app.setFont(font)
+
+    # Windows 11 style + light/dark tokens following the system theme
+    from ui.theme import theme
+    theme().install(app)
 
     window = MainWindow()
     window.show()

@@ -240,6 +240,68 @@ def test_trim_overlay_preserves_removed_bytes(tmp_path):
     assert fp.read_bytes() + backups[0].read_bytes() == original
 
 
+def test_jpeg_overlay_containing_eoi_marker_is_fully_detected(tmp_path):
+    """Overlay bytes that happen to contain FF D9 must not be mistaken for the image end."""
+    fp = tmp_path / "eoi_in_overlay.jpg"
+    overlay = b"PK\x03\x04" + b"\x00" * 100 + b"\xff\xd9" + b"\x11" * 100
+    fp.write_bytes(VALID_JPEG + overlay)
+
+    insp = inspect_file(fp)
+
+    assert insp["status"] == "OVERLAY"
+    assert insp["valid_end_pos"] == len(VALID_JPEG)
+    assert insp["bytes_stripped"] == len(overlay)
+
+
+def test_jpeg_with_embedded_exif_thumbnail_is_not_an_overlay(tmp_path):
+    """An APP1 thumbnail has its own FF D8 ... FF D9 inside the header: still a clean file."""
+    thumb = b"\xff\xd8\xff\xdb\x00\x03\x00\xff\xd9"
+    app1_payload = b"Exif\x00\x00" + thumb
+    app1 = b"\xff\xe1" + (len(app1_payload) + 2).to_bytes(2, "big") + app1_payload
+    fp = tmp_path / "thumb.jpg"
+    fp.write_bytes(VALID_JPEG[:2] + app1 + VALID_JPEG[2:])
+
+    assert inspect_file(fp)["status"] == "CLEAN"
+
+
+def test_jpeg_entropy_data_with_stuffed_and_restart_markers(tmp_path):
+    """FF 00 (byte stuffing) and FF D0..D7 (restart markers) inside scan data are not the end."""
+    scan = b"\x12\xff\x00\x34\xff\xd3\x56\xff\x00"
+    jpeg = VALID_JPEG[:-4] + scan + b"\xff\xd9"   # VALID_JPEG ends with ...\xbf\x00\xff\xd9
+    fp = tmp_path / "rst.jpg"
+    fp.write_bytes(jpeg + b"JUNK")
+
+    insp = inspect_file(fp)
+    assert insp["status"] == "OVERLAY" and insp["valid_end_pos"] == len(jpeg)
+
+
+def _gif(trailer_extra: bytes = b"") -> bytes:
+    """Minimal 1x1 GIF89a whose image data contains 0x3B (';') bytes."""
+    return (b"GIF89a" + b"\x01\x00\x01\x00" + b"\x80\x00\x00"      # LSD with 2-color GCT
+            + b"\x00\x00\x00\xff\xff\xff"                            # global color table
+            + b"\x21\xf9\x04\x00\x3b\x00\x00\x00"                    # GCE (delay byte = 0x3B)
+            + b"\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00"            # image descriptor
+            + b"\x02\x03\x3b\x3b\x3b\x00"                            # LZW data with ';' bytes
+            + b"\x3b" + trailer_extra)
+
+
+def test_gif_overlay_containing_semicolons_is_fully_detected(tmp_path):
+    fp = tmp_path / "anim.gif"
+    overlay = b"Rar!" + b";;;;" + b"\x00" * 20
+    fp.write_bytes(_gif(overlay))
+
+    insp = inspect_file(fp)
+    assert insp["status"] == "OVERLAY"
+    assert insp["valid_end_pos"] == len(_gif())
+    assert insp["bytes_stripped"] == len(overlay)
+
+
+def test_clean_gif_with_semicolons_in_data_is_clean(tmp_path):
+    fp = tmp_path / "clean.gif"
+    fp.write_bytes(_gif())
+    assert inspect_file(fp)["status"] == "CLEAN"
+
+
 def test_trim_keeps_backup_and_reports_success_when_utime_fails(tmp_path, monkeypatch):
     """Gate 2 finding: a timestamp failure after truncation must not discard the only backup."""
     import core.inspector as insp_mod

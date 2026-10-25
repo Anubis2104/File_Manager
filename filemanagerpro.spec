@@ -14,6 +14,7 @@ project_root = Path('.').resolve()
 added_files = [
     (str(project_root / 'config'), 'config'),
     (str(project_root / 'assets'), 'assets'),
+    (str(project_root / 'ui' / 'styles'), 'ui/styles'),
 ]
 
 # Ensure necessary GUI, media processing and file operation modules are included
@@ -22,6 +23,9 @@ hidden_imports = [
     'PyQt6.QtCore',
     'PyQt6.QtGui',
     'PyQt6.QtWidgets',
+    'PyQt6.QtSvg',
+    'PyQt6.QtMultimedia',
+    'PyQt6.QtMultimediaWidgets',
     'PIL',
     'PIL.Image',
     'rawpy',
@@ -33,6 +37,7 @@ hidden_imports = [
     'mutagen',
     'piexif',
     'loguru',
+    'ffmpeg',
 ]
 
 a = Analysis(

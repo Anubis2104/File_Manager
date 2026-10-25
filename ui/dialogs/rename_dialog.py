@@ -27,6 +27,7 @@ from core.workers  import RenameWorker, ScanWorker, make_scan_thread
 from utils.file_utils import RenameOperation
 from ui.widgets.hover_preview import HoverThumbnailPopup
 from ui.widgets.progress_dialog import TaskProgressDialog
+from ui.theme import qcolor, style
 
 
 def _format_size(size_bytes: int) -> str:
@@ -111,8 +112,8 @@ class RenameDialog(QDialog):
 
         # ── Settings group ──
         settings_group = QGroupBox("Cấu hình quy tắc đổi tên & Mẫu ghép Tokens")
-        settings_group.setStyleSheet(
-            "QGroupBox { font-weight: 600; font-size: 9pt; border: 1px solid #3a3a3c; "
+        style(settings_group, 
+            "QGroupBox { font-weight: 600; font-size: 9pt; border: 1px solid @stroke_control; "
             "border-radius: 6px; margin-top: 8px; padding-top: 8px; }"
             "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; }"
         )
@@ -180,19 +181,19 @@ class RenameDialog(QDialog):
         for label, token in token_chips:
             btn_chip = QPushButton(label)
             btn_chip.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn_chip.setStyleSheet(
-                "QPushButton { background-color: #2c2c2e; color: #5ac8fa; border: 1px solid #3a3a3c; "
+            style(btn_chip, 
+                "QPushButton { background-color: @fill_hover; color: @accent; border: 1px solid @stroke_control; "
                 "border-radius: 4px; padding: 2px 6px; font-size: 8pt; font-weight: 500; }"
-                "QPushButton:hover { background-color: #3a3a3c; color: #ffffff; border-color: #5ac8fa; }"
+                "QPushButton:hover { background-color: @fill_selected; color: @text_primary; border-color: @accent; }"
             )
             btn_chip.clicked.connect(lambda checked, t=token: self._insert_token(t))
             sg_row2.addWidget(btn_chip)
 
         btn_reset_pattern = QPushButton("↺ Mặc định")
-        btn_reset_pattern.setStyleSheet(
-            "QPushButton { background: transparent; color: #8e8e93; border: 1px dashed #48484a; "
+        style(btn_reset_pattern, 
+            "QPushButton { background: transparent; color: @text_secondary; border: 1px dashed @stroke_control; "
             "border-radius: 4px; padding: 2px 6px; font-size: 8pt; }"
-            "QPushButton:hover { color: #ffffff; border-color: #8e8e93; }"
+            "QPushButton:hover { color: @text_primary; border-color: @stroke_control; }"
         )
         btn_reset_pattern.clicked.connect(
             lambda: self.pattern_edit.setText("{folder}_{date}_{orientation}_{resolution}")
@@ -216,22 +217,22 @@ class RenameDialog(QDialog):
 
         # Summary badges
         self.lbl_summary_files = QLabel("📁 0 thư mục | 📄 0 tệp")
-        self.lbl_summary_files.setStyleSheet(
-            "background-color: #2c2c2e; color: #8e8e93; border-radius: 4px; "
+        style(self.lbl_summary_files, 
+            "background-color: @fill_hover; color: @text_secondary; border-radius: 4px; "
             "padding: 4px 8px; font-weight: 600; font-size: 8.5pt;"
         )
         filter_row.addWidget(self.lbl_summary_files)
 
         self.lbl_summary_rename = QLabel("✏️ 0 đổi tên")
-        self.lbl_summary_rename.setStyleSheet(
-            "background-color: #1c3829; color: #30d158; border-radius: 4px; "
+        style(self.lbl_summary_rename, 
+            "background-color: @success_bg; color: @success; border-radius: 4px; "
             "padding: 4px 8px; font-weight: 600; font-size: 8.5pt;"
         )
         filter_row.addWidget(self.lbl_summary_rename)
 
         self.lbl_summary_collision = QLabel("⚠️ 0 trùng lặp")
-        self.lbl_summary_collision.setStyleSheet(
-            "background-color: #382c1c; color: #ff9f0a; border-radius: 4px; "
+        style(self.lbl_summary_collision, 
+            "background-color: @warning_bg; color: @warning; border-radius: 4px; "
             "padding: 4px 8px; font-weight: 600; font-size: 8.5pt;"
         )
         filter_row.addWidget(self.lbl_summary_collision)
@@ -272,8 +273,8 @@ class RenameDialog(QDialog):
         self.table.setAlternatingRowColors(True)
         self.table.verticalHeader().setDefaultSectionSize(26)
         self.table.verticalHeader().setVisible(False)
-        self.table.setStyleSheet(
-            "QTableWidget { gridline-color: #2c2c2e; selection-background-color: #0a84ff; }"
+        style(self.table, 
+            "QTableWidget { gridline-color: @stroke_divider; selection-background-color: @accent; }"
             "QTableWidget::item { padding: 3px 6px; }"
         )
 
@@ -289,7 +290,7 @@ class RenameDialog(QDialog):
         bottom_row = QHBoxLayout()
 
         self.lbl_status = QLabel("")
-        self.lbl_status.setStyleSheet("color: #8e8e93; font-size: 8.5pt;")
+        style(self.lbl_status, "color: @text_secondary; font-size: 8.5pt;")
         bottom_row.addWidget(self.lbl_status)
 
         bottom_row.addStretch()
@@ -304,11 +305,11 @@ class RenameDialog(QDialog):
 
         self.btn_execute = QPushButton("✔  Thực hiện đổi tên")
         self.btn_execute.setObjectName("btnPrimary")
-        self.btn_execute.setStyleSheet(
-            "QPushButton#btnPrimary { background-color: #0a84ff; color: white; "
+        style(self.btn_execute, 
+            "QPushButton#btnPrimary { background-color: @accent; color: @text_on_accent; "
             "font-weight: 600; padding: 6px 18px; border-radius: 5px; }"
-            "QPushButton#btnPrimary:hover { background-color: #0071e3; }"
-            "QPushButton#btnPrimary:disabled { background-color: #3a3a3c; color: #636366; }"
+            "QPushButton#btnPrimary:hover { background-color: @accent; }"
+            "QPushButton#btnPrimary:disabled { background-color: @fill_selected; color: @text_tertiary; }"
         )
         self.btn_execute.clicked.connect(self._execute)
         bottom_row.addWidget(self.btn_execute)
@@ -473,11 +474,11 @@ class RenameDialog(QDialog):
             if is_changed:
                 num_changing += 1
                 if is_collision:
-                    new_item.setForeground(QColor("#ff9f0a"))
+                    new_item.setForeground(qcolor("warning"))
                 else:
-                    new_item.setForeground(QColor("#30d158"))
+                    new_item.setForeground(qcolor("success"))
             else:
-                new_item.setForeground(QColor("#8e8e93"))
+                new_item.setForeground(qcolor("text_secondary"))
 
             # 4. Date & source
             date_str = "—"
@@ -511,13 +512,13 @@ class RenameDialog(QDialog):
             # 8. Status
             if not is_changed:
                 status_text = "Giữ nguyên"
-                status_color = QColor("#8e8e93")
+                status_color = qcolor("text_secondary")
             elif is_collision:
                 status_text = "Trùng tên (thêm hậu tố)"
-                status_color = QColor("#ff9f0a")
+                status_color = qcolor("warning")
             else:
                 status_text = "Sẵn sàng đổi tên"
-                status_color = QColor("#30d158")
+                status_color = qcolor("success")
 
             status_item = QTableWidgetItem(status_text)
             status_item.setForeground(status_color)
@@ -711,10 +712,10 @@ class RenameDialog(QDialog):
                     if item:
                         if op.error:
                             item.setText(f"Lỗi: {op.error}")
-                            item.setForeground(QColor("#ff453a"))
+                            item.setForeground(qcolor("danger"))
                         elif op.src.name != op.dst.name:
                             item.setText("✅ Đã đổi tên")
-                            item.setForeground(QColor("#30d158"))
+                            item.setForeground(qcolor("success"))
         finally:
             self.table.blockSignals(False)
             self.table.setUpdatesEnabled(True)
@@ -764,14 +765,14 @@ class RenameDialog(QDialog):
                     if item:
                         if op.error:
                             item.setText(f"Lỗi: {op.error}")
-                            item.setForeground(QColor("#ff453a"))
+                            item.setForeground(qcolor("danger"))
                         elif getattr(op, "executed", False) and op.src.name != op.dst.name:
                             item.setText("✅ Đã đổi tên")
-                            item.setForeground(QColor("#30d158"))
+                            item.setForeground(qcolor("success"))
                             executed_ops.append(op)
                         elif not getattr(op, "executed", False):
                             item.setText("⚠️ Đã hủy")
-                            item.setForeground(QColor("#ff9f0a"))
+                            item.setForeground(qcolor("warning"))
         finally:
             self.table.blockSignals(False)
             self.table.setUpdatesEnabled(True)

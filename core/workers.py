@@ -222,6 +222,40 @@ class MetadataStripWorker(QObject):
 
 
 # ─────────────────────────────────────────────────────────────
+# CUDA Probe Worker
+# ─────────────────────────────────────────────────────────────
+
+class CudaProbe(QObject):
+    """
+    Detect CUDA off the GUI thread: `import torch` + CUDA init take seconds.
+
+    Runs on a daemon Python thread, not a QThread: a window closed during startup must
+    neither wait for torch nor destroy a running QThread (which aborts the process).
+    One process-wide instance that is never deleted, so the worker thread always emits
+    on a live object; receivers that are gone are simply disconnected by Qt.
+    """
+    detected = pyqtSignal(str)               # str(CudaInfo), delivered queued to the GUI thread
+
+    def start(self) -> None:
+        threading.Thread(target=self._run, name="CudaProbe", daemon=True).start()
+
+    def _run(self) -> None:
+        from utils import cuda_helper
+        self.detected.emit(str(cuda_helper.get_cuda_info()))
+
+
+_cuda_probe: Optional[CudaProbe] = None
+
+
+def cuda_probe() -> CudaProbe:
+    """The shared probe; create it on the GUI thread (first call from MainWindow)."""
+    global _cuda_probe
+    if _cuda_probe is None:
+        _cuda_probe = CudaProbe()
+    return _cuda_probe
+
+
+# ─────────────────────────────────────────────────────────────
 # Duplicate Detection Worker
 # ─────────────────────────────────────────────────────────────
 
@@ -242,11 +276,13 @@ class DupScanWorker(QObject):
         embedding_threshold: float = 0.95,
         model_name: str = "dinov2_vits14",
         batch_size: int = 32,
+        device: str = "cuda",            # 'cuda' | 'cpu'
         parent=None,
     ):
         super().__init__(parent)
         self.image_paths = image_paths
         self.engine_mode = engine_mode
+        self.device = device
         self.phash_threshold = phash_threshold
         self.embedding_threshold = embedding_threshold
         self.model_name = model_name
@@ -270,6 +306,7 @@ class DupScanWorker(QObject):
                 embedding_threshold=self.embedding_threshold,
                 model_name=self.model_name,
                 batch_size=self.batch_size,
+                device=self.device,
             )
 
             def _prog(cur, tot, msg=""):
@@ -808,3 +845,34 @@ class TrimOverlayWorker(QObject):
         except Exception as exc:
             self.error.emit(str(exc))
 
+
+
+# ─────────────────────────────────────────────────────────────
+# Paste (Explorer-style copy / move)
+# ─────────────────────────────────────────────────────────────
+
+class PasteWorker(QObject):
+    """Copy or move files/folders into a folder off the GUI thread (core.file_ops.paste)."""
+    progress  = pyqtSignal(int, int, str)    # (done, total, current name)
+    finished  = pyqtSignal(list)              # list[PasteResult]
+    error     = pyqtSignal(str)
+
+    def __init__(self, sources: list[Path], dest_dir: Path, move: bool, parent=None):
+        super().__init__(parent)
+        self.sources = list(sources)
+        self.dest_dir = dest_dir
+        self.move = move
+        self._cancel_event = threading.Event()
+
+    def cancel(self):
+        self._cancel_event.set()
+
+    def run(self):
+        from core.file_ops import paste
+        try:
+            results = paste(self.sources, self.dest_dir, self.move,
+                            on_progress=lambda d, t, n: self.progress.emit(d, t, n),
+                            cancel_check=self._cancel_event.is_set)
+            self.finished.emit(results)
+        except Exception as exc:
+            self.error.emit(str(exc))

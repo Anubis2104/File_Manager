@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
 
 from ui.widgets.progress_dialog import TaskProgressDialog
 from utils.file_utils import classify_extension
+from ui.theme import style
 
 
 def format_size(bytes_val: int) -> str:
@@ -167,7 +168,7 @@ class StatsDialog(QDialog):
         self.tabs.addTab(self.table_ext, "📁 Phân loại định dạng")
 
         self.lbl_status = QLabel("Đang quét phân tích cây thư mục...")
-        self.lbl_status.setStyleSheet("color: #8e8e93; font-size: 11px;")
+        style(self.lbl_status, "color: @text_secondary; font-size: 11px;")
         layout.addWidget(self.lbl_status)
 
         # ── Buttons ──
@@ -183,7 +184,7 @@ class StatsDialog(QDialog):
         l = QVBoxLayout(box)
         lbl = QLabel(val)
         lbl.setObjectName("cardValue")
-        lbl.setStyleSheet("font-size: 16px; font-weight: bold; color: #0a84ff; padding: 4px;")
+        style(lbl, "font-size: 16px; font-weight: bold; color: @accent; padding: 4px;")
         l.addWidget(lbl)
         return box
 

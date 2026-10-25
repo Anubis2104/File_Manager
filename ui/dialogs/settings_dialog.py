@@ -24,6 +24,7 @@ from core.background_manager import (
     import_background_file, resolve_background_file,
     IMAGE_BG_EXTS, VIDEO_BG_EXTS,
 )
+from ui.theme import style
 
 
 SETTINGS_PATH = get_app_dir() / "config" / "settings.json"
@@ -53,6 +54,7 @@ def load_settings() -> dict:
             "exiftool_path": "exiftool.exe",
         },
         "appearance": {
+            "theme": "system",
             "blur_enabled": False,
             "background_type": "none",
             "background_file": "",
@@ -74,12 +76,17 @@ def load_settings() -> dict:
     return defaults
 
 
+# Sections this dialog edits; anything else in the file (e.g. Quick access pins under
+# "navigation") belongs to other parts of the app and is left as it is on disk.
+OWNED_SECTIONS = ("rename", "duplicate", "performance", "tools", "appearance", "general")
+
+
 def save_settings(cfg: dict) -> bool:
-    """Save settings dictionary to settings.json."""
+    """Write this dialog's sections to settings.json atomically, keeping all other keys."""
     try:
-        SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(SETTINGS_PATH, "w", encoding="utf-8") as f:
-            json.dump(cfg, f, indent=2, ensure_ascii=False)
+        from utils.settings_store import update_settings
+        update_settings(lambda disk: disk.update({k: cfg[k] for k in OWNED_SECTIONS if k in cfg}),
+                        SETTINGS_PATH)
         return True
     except Exception:
         return False
@@ -195,7 +202,7 @@ class SettingsDialog(QDialog):
         # GPU Info label
         cuda_str = str(get_cuda_info())
         self.lbl_gpu = QLabel(f"<b>GPU hiện tại:</b> {cuda_str}")
-        self.lbl_gpu.setStyleSheet("color: #30d158; font-size: 11px;")
+        style(self.lbl_gpu, "color: @success; font-size: 11px;")
         gp_layout.addWidget(self.lbl_gpu)
 
         p_layout.addWidget(g_perf)
@@ -220,6 +227,17 @@ class SettingsDialog(QDialog):
         a_layout = QVBoxLayout(tab_appr)
         a_layout.setSpacing(10)
 
+        # 0. Color theme (like Windows Settings > Personalization > Colors)
+        g_theme = QGroupBox("Chủ đề màu")
+        gt_layout = QHBoxLayout(g_theme)
+        gt_layout.addWidget(QLabel("Chế độ:"))
+        self.combo_theme = QComboBox()
+        for label, value in (("Theo hệ thống Windows", "system"), ("Sáng", "light"), ("Tối", "dark")):
+            self.combo_theme.addItem(label, value)
+        gt_layout.addWidget(self.combo_theme)
+        gt_layout.addStretch()
+        a_layout.addWidget(g_theme)
+
         # 1. Mode Selection Group
         g_mode = QGroupBox("Chế độ hình nền ứng dụng")
         gm_layout = QVBoxLayout(g_mode)
@@ -227,7 +245,7 @@ class SettingsDialog(QDialog):
 
         self.btn_group_mode = QButtonGroup(self)
 
-        self.radio_mode_default = QRadioButton("Nền mặc định (Giao diện tối chuẩn #0b0f19, hiệu năng cao nhất)")
+        self.radio_mode_default = QRadioButton("Nền mặc định (Giao diện chuẩn theo Windows, hiệu năng cao nhất)")
         self.radio_mode_blur = QRadioButton("Nền Blur & Trong suốt (Windows Acrylic / Pure Glass nhìn xuyên Desktop)")
         self.radio_mode_custom = QRadioButton("Nền Tùy chỉnh (Ảnh tĩnh & Video động Live Wallpaper)")
 
@@ -249,7 +267,7 @@ class SettingsDialog(QDialog):
             "hoặc các cửa sổ phía sau. Kéo thanh trượt để chuyển từ chế độ <b>Trong suốt hoàn toàn (0%)</b> "
             "đến <b>Kính mờ đục (100%)</b>."
         )
-        lbl_blur_hint.setStyleSheet("color: #94a3b8; font-size: 8.5pt;")
+        style(lbl_blur_hint, "color: @text_secondary; font-size: 8.5pt;")
         lbl_blur_hint.setWordWrap(True)
         gb_layout.addWidget(lbl_blur_hint)
 
@@ -259,7 +277,7 @@ class SettingsDialog(QDialog):
         self.slider_blur.setRange(0, 100)
         self.slider_blur.setValue(50)
         self.lbl_blur_val = QLabel("50% (Kính mờ tiêu chuẩn)")
-        self.lbl_blur_val.setStyleSheet("color: #38bdf8; font-weight: 600; font-size: 8.5pt;")
+        style(self.lbl_blur_val, "color: @accent; font-weight: 600; font-size: 8.5pt;")
         self.lbl_blur_val.setMinimumWidth(260)
         self.slider_blur.valueChanged.connect(self._on_blur_slider_changed)
 
@@ -306,7 +324,7 @@ class SettingsDialog(QDialog):
             "hoặc xóa thì tính năng hình nền vẫn hoạt động vĩnh viễn!"
         )
         lbl_persist_note.setWordWrap(True)
-        lbl_persist_note.setStyleSheet("color: #34d399; font-size: 8.5pt; padding: 6px; background: #064e3b; border-radius: 4px;")
+        style(lbl_persist_note, "color: @success; font-size: 8.5pt; padding: 6px; background: @success_bg; border-radius: 4px;")
         gw_layout.addWidget(lbl_persist_note)
 
         # Opacity slider
@@ -376,6 +394,8 @@ class SettingsDialog(QDialog):
         self.combo_dup_engine.setCurrentIndex(eng_map.get(d.get("default_engine", "both"), 0))
         self.spin_phash.setValue(d.get("phash_threshold", 10))
         self.spin_dino_thresh.setValue(int(d.get("embedding_threshold", 0.95) * 100))
+        model_map = {"dinov2_vits14": 0, "dinov2_vitb14": 1, "dinov2_vitl14": 2}
+        self.combo_dino_model.setCurrentIndex(model_map.get(d.get("dinov2_model", "dinov2_vits14"), 0))
 
         p = self.cfg.get("performance", {})
         self.spin_workers.setValue(p.get("scanner_workers", 8))
@@ -386,6 +406,8 @@ class SettingsDialog(QDialog):
 
         # Appearance settings
         a = self.cfg.get("appearance", {})
+        idx = self.combo_theme.findData(a.get("theme", "system"))
+        self.combo_theme.setCurrentIndex(idx if idx >= 0 else 0)
         mode = a.get("background_mode", "default")
         if mode == "blur":
             self.radio_mode_blur.setChecked(True)
@@ -476,7 +498,9 @@ class SettingsDialog(QDialog):
             if copied_path:
                 bg_file_val = f"assets/background/{copied_path.name}"
 
+        chosen_theme = self.combo_theme.currentData()
         self.cfg["appearance"] = {
+            "theme": chosen_theme,
             "background_mode": chosen_mode,
             "blur_opacity": self.slider_blur.value(),
             "blur_enabled": (chosen_mode == "blur"),
@@ -486,6 +510,9 @@ class SettingsDialog(QDialog):
         }
 
         if save_settings(self.cfg):
+            from ui.theme import theme
+            if theme().mode != chosen_theme:
+                theme().set_mode(chosen_theme)   # applies live, no restart needed
             QMessageBox.information(self, "Thành công", "Đã lưu cài đặt hệ thống thành công!")
             self.accept()
         else:

@@ -23,7 +23,7 @@ _APP = QApplication.instance() or QApplication(sys.argv)
 from ui.widgets.svg_icons import get_svg_pixmap, get_svg_icon
 from ui.widgets.quick_look_dialog import QuickLookDialog
 from ui.widgets.command_palette import CommandPaletteDialog, PaletteCommand
-from ui.panels.media_card_delegate import MediaCardDelegate
+from ui.panels.explorer_delegate import ExplorerItemDelegate, VIEW_SPECS
 from ui.panels.content_panel import ContentPanel, EmptyDropzoneWidget
 
 
@@ -107,16 +107,15 @@ class TestUIUpgrades(unittest.TestCase):
 
         dlg.close()
 
-    def test_media_card_delegate(self):
-        """Verify MediaCardDelegate size hint and thumbnail caching."""
-        model = QFileSystemModel()
-        delegate = MediaCardDelegate(model)
-        from PyQt6.QtWidgets import QStyleOptionViewItem
+    def test_explorer_item_delegate(self):
+        """The Explorer delegate sizes items by the active view layout (replaced MediaCardDelegate)."""
+        from PyQt6.QtWidgets import QListView, QStyleOptionViewItem
+        view = QListView()
+        delegate = ExplorerItemDelegate(view)
         opt = QStyleOptionViewItem()
-        idx = model.index(0, 0)
-        size = delegate.sizeHint(opt, idx)
-        self.assertEqual(size.width(), MediaCardDelegate.CARD_WIDTH)
-        self.assertEqual(size.height(), MediaCardDelegate.CARD_HEIGHT)
+        for key in ("xl", "large", "medium", "small", "list", "tiles"):
+            delegate.set_spec(VIEW_SPECS[key])
+            self.assertEqual(delegate.sizeHint(opt, QFileSystemModel().index(0, 0)), VIEW_SPECS[key].cell)
 
     def test_content_panel_dropzone(self):
         """Verify ContentPanel contains EmptyDropzoneWidget and custom signals."""

@@ -10,6 +10,7 @@ from typing import Optional
 from PyQt6.QtCore import QByteArray, QSize, Qt
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor
 from PyQt6.QtSvg import QSvgRenderer
+from ui.theme import tok
 
 # ── SVG Vector Paths (ViewBox 0 0 24 24, stroke 2, fill none) ──
 _SVG_TEMPLATES: dict[str, str] = {
@@ -64,8 +65,9 @@ def _build_svg_xml(name: str, stroke_color: str, stroke_width: float = 2.0) -> s
     )
 
 
-def get_svg_pixmap(name: str, color: str = "#cbd5e1", size: int = 20) -> QPixmap:
+def get_svg_pixmap(name: str, color: Optional[str] = None, size: int = 20) -> QPixmap:
     """Generate or retrieve a cached QPixmap of the requested SVG icon."""
+    color = color or tok("text_secondary")
     key = (name, color, size)
     if key in _PIXMAP_CACHE:
         return _PIXMAP_CACHE[key]
@@ -85,12 +87,13 @@ def get_svg_pixmap(name: str, color: str = "#cbd5e1", size: int = 20) -> QPixmap
     return pix
 
 
-def get_svg_icon(name: str, color: str = "#cbd5e1", size: int = 20, active_color: Optional[str] = None) -> QIcon:
+def get_svg_icon(name: str, color: Optional[str] = None, size: int = 20, active_color: Optional[str] = None) -> QIcon:
     """
     Generate or retrieve a cached QIcon with normal and active/selected states.
-    Default color: Slate-300 (#cbd5e1). Active color: Sky-400 (#38bdf8).
+    Default color: theme text_secondary. Active color: theme accent.
     """
-    act_color = active_color or "#38bdf8"
+    color = color or tok("text_secondary")
+    act_color = active_color or tok("accent")
     key = (name, color, size, act_color)
     if key in _ICON_CACHE:
         return _ICON_CACHE[key]

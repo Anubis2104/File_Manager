@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
 )
 
 from utils.file_utils import IMAGE_EXTS, VIDEO_EXTS
+from ui.theme import style
 
 
 class HoverThumbnailPopup(QWidget):
@@ -44,8 +45,8 @@ class HoverThumbnailPopup(QWidget):
         root_layout.setContentsMargins(6, 6, 6, 6)
 
         self.card = QFrame(self)
-        self.card.setStyleSheet(
-            "QFrame { background-color: #1e1e24; border: 1px solid #0a84ff; "
+        style(self.card, 
+            "QFrame { background-color: @bg_card; border: 1px solid @accent; "
             "border-radius: 8px; padding: 6px; }"
         )
         card_layout = QVBoxLayout(self.card)
@@ -63,8 +64,8 @@ class HoverThumbnailPopup(QWidget):
         self.lbl_thumb = QLabel()
         self.lbl_thumb.setFixedSize(150, 150)
         self.lbl_thumb.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_thumb.setStyleSheet(
-            "background-color: #121214; border-radius: 5px; border: 1px solid #2c2c2e;"
+        style(self.lbl_thumb, 
+            "background-color: @bg_base; border-radius: 5px; border: 1px solid @stroke_divider;"
         )
         card_layout.addWidget(self.lbl_thumb)
 
@@ -72,12 +73,12 @@ class HoverThumbnailPopup(QWidget):
         self.lbl_name = QLabel()
         self.lbl_name.setWordWrap(True)
         self.lbl_name.setFixedWidth(150)
-        self.lbl_name.setStyleSheet("color: #ffffff; font-weight: 600; font-size: 8pt;")
+        style(self.lbl_name, "color: @text_primary; font-weight: 600; font-size: 8pt;")
         card_layout.addWidget(self.lbl_name)
 
         self.lbl_meta = QLabel()
         self.lbl_meta.setFixedWidth(150)
-        self.lbl_meta.setStyleSheet("color: #8e8e93; font-size: 7.5pt;")
+        style(self.lbl_meta, "color: @text_secondary; font-size: 7.5pt;")
         card_layout.addWidget(self.lbl_meta)
 
         root_layout.addWidget(self.card)

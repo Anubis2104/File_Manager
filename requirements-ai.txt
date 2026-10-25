@@ -1,6 +1,8 @@
 # ===== Optional: DINOv2 AI duplicate engine =====
 # Without these packages the app still runs; duplicate detection falls back to pHash only.
-# For NVIDIA CUDA builds of torch, follow https://pytorch.org/get-started/locally/
+# NOTE: on Windows, PyPI only ships the CPU-only torch build. Run_FileManagerPro.bat swaps it
+# for the CUDA build automatically when an NVIDIA GPU is present. Manual equivalent:
+#   pip install --force-reinstall --no-deps torch torchvision --index-url https://download.pytorch.org/whl/cu126
 -r requirements.txt
 
 torch>=2.3.0

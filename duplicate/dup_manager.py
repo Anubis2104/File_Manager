@@ -8,8 +8,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Callable
 
-from utils.file_utils import classify_extension, IMAGE_EXTS, RAW_EXTS
-from utils.safe_log import log_swallowed
+from utils.file_utils import classify_extension, IMAGE_EXTS, RAW_EXTS, VIDEO_EXTS
+from utils.safe_log import log_swallowed, safe_log
 
 
 @dataclass
@@ -49,11 +49,13 @@ class DupManager:
         embedding_threshold: float = 0.95,
         model_name: str = "dinov2_vits14",
         batch_size: int = 32,
+        device: str = "cuda",            # 'cuda' | 'cpu' (performance.use_cuda)
     ):
         self.phash_threshold = phash_threshold
         self.embedding_threshold = embedding_threshold
         self.model_name = model_name
         self.batch_size = batch_size
+        self.device = device
 
         self._phash_engine = None
         self._embed_engine = None
@@ -71,7 +73,7 @@ class DupManager:
         """Run pHash engine only. Returns DupGroup list."""
         if not self._phash_engine:
             from duplicate.phash_engine import PHashEngine
-            self._phash_engine = PHashEngine()
+            self._phash_engine = PHashEngine(device=self.device)
 
         if on_progress:
             on_progress(0, len(image_paths), "Bắt đầu tính pHash...")
@@ -109,6 +111,7 @@ class DupManager:
             from duplicate.embedding_engine import EmbeddingEngine
             self._embed_engine = EmbeddingEngine(
                 model_name=self.model_name,
+                device=self.device,
                 batch_size=self.batch_size,
             )
 
@@ -150,7 +153,13 @@ class DupManager:
         if remaining:
             if on_progress:
                 on_progress(0, len(remaining), "Giai đoạn 2: DINOv2 + FAISS...")
-            dino_groups = self.find_duplicates_embedding(remaining, on_progress=on_progress, cancel_check=cancel_check)
+            try:
+                dino_groups = self.find_duplicates_embedding(remaining, on_progress=on_progress, cancel_check=cancel_check)
+            except InterruptedError:
+                raise                        # user cancel, not an engine failure
+            except Exception as exc:
+                safe_log("w", "DupManager", f"DINOv2 embedding stage unavailable or failed, falling back to pHash: {exc}")
+                dino_groups = []
 
         # Merge and re-number
         all_groups = phash_groups + dino_groups
@@ -247,12 +256,19 @@ def select_best_keeper(group: DupGroup) -> None:
 
 
 def _safe_stat(path: Path) -> dict:
-    """Safely get file size and image dimensions."""
+    """Safely get file size and image/video dimensions."""
     result = {"size": 0, "width": 0, "height": 0}
     try:
         result["size"] = path.stat().st_size
     except OSError:
         pass
+    if classify_extension(path.suffix) == "video":
+        # PIL/rawpy cannot open videos; ffprobe reads the stream size
+        from utils.media_info import get_video_dimensions
+        dims = get_video_dimensions(path)
+        if dims:
+            result["width"], result["height"] = dims.width, dims.height
+        return result
     try:
         from PIL import Image
         Image.MAX_IMAGE_PIXELS = None
@@ -271,9 +287,9 @@ def _safe_stat(path: Path) -> dict:
 
 
 def collect_image_paths(root: Path, recursive: bool = True) -> list[Path]:
-    """Collect all image and RAW camera file paths from a directory."""
+    """Collect all image, RAW camera, and video file paths from a directory."""
     walker = root.rglob("*") if recursive else root.iterdir()
-    supported = IMAGE_EXTS | RAW_EXTS
+    supported = IMAGE_EXTS | RAW_EXTS | VIDEO_EXTS
     return [
         p for p in walker
         if p.is_file() and p.suffix.lower() in supported

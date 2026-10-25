@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
 
 from core.logger  import RenameLogger, LogEntry
 from ui.widgets.progress_dialog import TaskProgressDialog
+from ui.theme import qcolor, style, tok
 
 
 class LogRestoreDialog(QDialog):
@@ -71,7 +72,7 @@ class LogRestoreDialog(QDialog):
 
         # ── Table ──
         info_lbl = QLabel("Danh sách thao tác rename (mới nhất trước):")
-        info_lbl.setStyleSheet("color: #8e8e93; font-size: 11px; font-weight: 600;")
+        style(info_lbl, "color: @text_secondary; font-size: 11px; font-weight: 600;")
         layout.addWidget(info_lbl)
 
         self.table = QTableWidget()
@@ -92,7 +93,7 @@ class LogRestoreDialog(QDialog):
 
 
         self.lbl_status = QLabel("")
-        self.lbl_status.setStyleSheet("color: #8e8e93; font-size: 11px;")
+        style(self.lbl_status, "color: @text_secondary; font-size: 11px;")
         layout.addWidget(self.lbl_status)
 
         # ── Buttons ──
@@ -151,11 +152,11 @@ class LogRestoreDialog(QDialog):
         for row, entry in enumerate(entries):
             ts_str = entry.timestamp.strftime("%d/%m/%y %H:%M")
             op_color = {
-                "rename": "#0a84ff",
-                "restore": "#30d158",
-                "dry_rename": "#636366",
-                "strip_metadata": "#ff9f0a",
-            }.get(entry.operation, "#8e8e93")
+                "rename": tok("accent"),
+                "restore": tok("success"),
+                "dry_rename": tok("text_tertiary"),
+                "strip_metadata": tok("warning"),
+            }.get(entry.operation, tok("text_secondary"))
 
             items = [
                 QTableWidgetItem(ts_str),
@@ -166,7 +167,7 @@ class LogRestoreDialog(QDialog):
             ]
             items[1].setForeground(QColor(op_color))
             if entry.error:
-                items[4].setForeground(QColor("#ff453a"))
+                items[4].setForeground(qcolor("danger"))
 
             for col, item in enumerate(items):
                 self.table.setItem(row, col, item)

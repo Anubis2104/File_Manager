@@ -1,7 +1,7 @@
 """
 ui/panels/right_dock_panel.py
-Dual-Mode Right Panel:
-- Normal Mode (Default): Full-featured PreviewPanel (photo/video preview, EXIF, metadata).
+Explorer's right-hand pane:
+- Default: DetailsPane (ui/panels/details_pane.py), as the Details or the Preview pane.
 - Queue Mode (On-demand): Sequential Drag-and-Drop Queue Dock with live thumbnail slots,
   automatic number ordering [Số thứ tự]_[Tên cũ], quick-sort tools, and direct execution.
 
@@ -23,13 +23,15 @@ from PyQt6.QtWidgets import (
     QFrame, QSizePolicy, QToolButton,
 )
 
-from ui.panels.preview_panel import PreviewPanel
+from ui.panels.details_pane import DetailsPane
 from core.scanner import FileInfo, DirectoryScanner
 from core.renamer import build_new_name, RenameEngine
 from core.logger import RenameLogger
 from core.workers import RenameWorker
 from utils.file_utils import RenameOperation, IMAGE_EXTS, VIDEO_EXTS
 from ui.widgets.progress_dialog import TaskProgressDialog
+from ui.theme import qcolor, style, theme
+from utils.safe_log import log_swallowed
 
 
 class QueueDropTable(QTableWidget):
@@ -47,11 +49,11 @@ class QueueDropTable(QTableWidget):
         self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.verticalHeader().setVisible(False)
         self.setShowGrid(False)
-        self.setStyleSheet(
-            "QTableWidget { background-color: #1c1c1e; gridline-color: #2c2c2e; "
-            "border: 1px solid #3a3a3c; border-radius: 6px; }"
-            "QTableWidget::item { padding: 4px 6px; border-bottom: 1px solid #28282a; }"
-            "QTableWidget::item:selected { background-color: #0a84ff; color: white; }"
+        style(self, 
+            "QTableWidget { background-color: @bg_base; gridline-color: @stroke_divider; "
+            "border: 1px solid @stroke_control; border-radius: 6px; }"
+            "QTableWidget::item { padding: 4px 6px; border-bottom: 1px solid @stroke_divider; }"
+            "QTableWidget::item:selected { background-color: @fill_selected; color: @text_primary; }"
         )
 
     def dragEnterEvent(self, event):
@@ -88,8 +90,11 @@ class QueueDropTable(QTableWidget):
 
 
 class AsyncThumbnailWorker(QThread):
-    """Asynchronously decodes thumbnails in background so main GUI thread never freezes."""
-    thumbnail_ready = pyqtSignal(Path, QPixmap)
+    """Asynchronously decodes thumbnails in background so main GUI thread never freezes.
+
+    Emits QImage: QPixmap is a GUI-thread-only paint device, so the receiver converts it.
+    """
+    thumbnail_ready = pyqtSignal(Path, QImage)
 
     def __init__(self, paths: list[Path], parent=None):
         super().__init__(parent)
@@ -112,10 +117,9 @@ class AsyncThumbnailWorker(QThread):
                     if img.loadFromData(data):
                         img = img.scaled(36, 36, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
                         if not img.isNull() and not self._cancelled:
-                            pix = QPixmap.fromImage(img)
-                            self.thumbnail_ready.emit(p, pix)
-                except Exception:
-                    pass
+                            self.thumbnail_ready.emit(p, img)
+                except Exception as _bare_exc:
+                    log_swallowed("UI:QueueThumb", _bare_exc)
 
 
 class FolderScanThread(QThread):
@@ -156,7 +160,7 @@ class QueueDockWidget(QWidget):
         self._thread: Optional[QThread] = None
 
         self._placeholder_pix = QPixmap(36, 36)
-        self._placeholder_pix.fill(QColor("#2c2c2e"))
+        self._placeholder_pix.fill(qcolor("fill_hover"))
 
         self._build_ui()
 
@@ -168,17 +172,17 @@ class QueueDockWidget(QWidget):
         # ── Header: Title & Close Button ──
         hdr_bar = QHBoxLayout()
         lbl_title = QLabel("🔢 Hàng đợi Đổi tên (Kéo thả)")
-        lbl_title.setStyleSheet("font-weight: 700; font-size: 9.5pt; color: #0a84ff;")
+        style(lbl_title, "font-weight: 700; font-size: 9.5pt; color: @accent;")
         hdr_bar.addWidget(lbl_title)
         hdr_bar.addStretch()
 
         btn_close = QPushButton("✕ Đóng")
         btn_close.setToolTip("Quay lại chế độ Xem trước thông thường")
         btn_close.setFixedHeight(24)
-        btn_close.setStyleSheet(
-            "QPushButton { background: #3a3a3c; color: #d1d1d6; border-radius: 4px; "
+        style(btn_close, 
+            "QPushButton { background: @fill_selected; color: @text_secondary; border-radius: 4px; "
             "padding: 2px 8px; font-size: 8.5pt; font-weight: 600; border: none; }"
-            "QPushButton:hover { background: #48484a; color: white; }"
+            "QPushButton:hover { background: @fill_selected; color: @text_primary; }"
         )
         btn_close.clicked.connect(self.close_requested.emit)
         hdr_bar.addWidget(btn_close)
@@ -198,32 +202,32 @@ class QueueDockWidget(QWidget):
         act_bar = QHBoxLayout()
         self.btn_load_all = QPushButton("➕ Nạp tất cả tệp")
         self.btn_load_all.setToolTip("Nạp toàn bộ tệp trong thư mục đang mở vào hàng đợi")
-        self.btn_load_all.setStyleSheet(
-            "QPushButton { background: #2c2c2e; color: #0a84ff; border: 1px solid #3a3a3c; "
+        style(self.btn_load_all, 
+            "QPushButton { background: @fill_hover; color: @accent; border: 1px solid @stroke_control; "
             "border-radius: 4px; padding: 3px 6px; font-size: 8pt; font-weight: 600; }"
-            "QPushButton:hover { background: #3a3a3c; }"
+            "QPushButton:hover { background: @fill_selected; }"
         )
         self.btn_load_all.clicked.connect(self.load_all_from_current_folder)
         act_bar.addWidget(self.btn_load_all)
 
         btn_sort_date = QPushButton("⚡ Ngày")
         btn_sort_date.setToolTip("Tự động sắp xếp theo ngày chụp/tạo cũ → mới")
-        btn_sort_date.setStyleSheet(self.btn_load_all.styleSheet())
+        style(btn_sort_date, theme().template(self.btn_load_all))
         btn_sort_date.clicked.connect(self._sort_by_date)
         act_bar.addWidget(btn_sort_date)
 
         btn_sort_name = QPushButton("⚡ Tên A-Z")
         btn_sort_name.setToolTip("Sắp xếp theo tên A-Z")
-        btn_sort_name.setStyleSheet(self.btn_load_all.styleSheet())
+        style(btn_sort_name, theme().template(self.btn_load_all))
         btn_sort_name.clicked.connect(self._sort_by_name)
         act_bar.addWidget(btn_sort_name)
 
         btn_clear = QPushButton("↺ Xóa")
         btn_clear.setToolTip("Làm trống hàng đợi")
-        btn_clear.setStyleSheet(
-            "QPushButton { background: #2c2c2e; color: #ff453a; border: 1px solid #3a3a3c; "
+        style(btn_clear, 
+            "QPushButton { background: @fill_hover; color: @danger; border: 1px solid @stroke_control; "
             "border-radius: 4px; padding: 3px 6px; font-size: 8pt; font-weight: 600; }"
-            "QPushButton:hover { background: #3a3a3c; }"
+            "QPushButton:hover { background: @fill_selected; }"
         )
         btn_clear.clicked.connect(self.clear_queue)
         act_bar.addWidget(btn_clear)
@@ -232,7 +236,7 @@ class QueueDockWidget(QWidget):
 
         # ── Drop hint ──
         self.lbl_hint = QLabel("💡 Kéo thả tệp từ Bảng giữa (Kho) vào đây")
-        self.lbl_hint.setStyleSheet("color: #8e8e93; font-size: 8pt; font-style: italic;")
+        style(self.lbl_hint, "color: @text_secondary; font-size: 8pt; font-style: italic;")
         self.lbl_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.lbl_hint)
 
@@ -250,18 +254,18 @@ class QueueDockWidget(QWidget):
 
         # ── Bottom Status & Execution ──
         self.lbl_summary = QLabel("0 tệp trong hàng đợi")
-        self.lbl_summary.setStyleSheet("color: #8e8e93; font-size: 8.5pt;")
+        style(self.lbl_summary, "color: @text_secondary; font-size: 8.5pt;")
         layout.addWidget(self.lbl_summary)
 
         self.btn_execute = QPushButton("✔ Thực hiện Đổi tên Hàng đợi")
         self.btn_execute.setObjectName("btnPrimary")
         self.btn_execute.setFixedHeight(34)
         self.btn_execute.setEnabled(False)
-        self.btn_execute.setStyleSheet(
-            "QPushButton { background: #0a84ff; color: white; font-weight: 700; "
+        style(self.btn_execute, 
+            "QPushButton { background: @accent; color: @text_on_accent; font-weight: 700; "
             "font-size: 9pt; border-radius: 6px; border: none; }"
-            "QPushButton:hover { background: #0071e3; }"
-            "QPushButton:disabled { background: #3a3a3c; color: #636366; }"
+            "QPushButton:hover { background: @accent; }"
+            "QPushButton:disabled { background: @fill_selected; color: @text_tertiary; }"
         )
         self.btn_execute.clicked.connect(self._execute_rename)
         layout.addWidget(self.btn_execute)
@@ -361,7 +365,7 @@ class QueueDockWidget(QWidget):
             # 1. STT Badge
             item_seq = QTableWidgetItem(f" #{seq_str} ")
             item_seq.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            item_seq.setForeground(QColor("#0a84ff"))
+            item_seq.setForeground(qcolor("accent"))
             font = item_seq.font()
             font.setBold(True)
             item_seq.setFont(font)
@@ -411,7 +415,7 @@ class QueueDockWidget(QWidget):
             btn_rm.setText("✖")
             btn_rm.setToolTip("Xóa khỏi hàng đợi")
             btn_rm.setFixedSize(20, 20)
-            btn_rm.setStyleSheet("color: #ff453a;")
+            style(btn_rm, "color: @danger;")
             btn_rm.clicked.connect(lambda _, row=i: self._remove_item(row))
             act_lay.addWidget(btn_rm)
 
@@ -430,7 +434,8 @@ class QueueDockWidget(QWidget):
         self._thumb_worker.thumbnail_ready.connect(self._on_thumbnail_ready)
         self._thumb_worker.start()
 
-    def _on_thumbnail_ready(self, path: Path, pix: QPixmap):
+    def _on_thumbnail_ready(self, path: Path, image: QImage):
+        pix = QPixmap.fromImage(image)                # GUI thread (queued connection)
         self._thumb_cache[path] = pix
         for row, info in enumerate(self.queue_items):
             if info.path == path:
@@ -571,14 +576,14 @@ class QueueDockWidget(QWidget):
 
 class RightDockPanel(QWidget):
     """
-    Combined Right-hand Panel:
-    - Page 0 (Default): Standard PreviewPanel (Full preview, EXIF, metadata).
-    - Page 1: QueueDockWidget (Sequential drag-and-drop queue with preview thumbnails).
-
-    Allows switching easily between normal preview mode and queue mode.
+    Explorer's right-hand pane:
+    - Page 0 (default): DetailsPane, in "details" (Alt+Shift+P) or "preview" (Alt+P) mode.
+    - Page 1: QueueDockWidget (sequential drag-and-drop rename queue), opened from the
+      Tools / context menu and closed with its own button.
     """
     file_preview_requested = pyqtSignal(Path)
     queue_completed = pyqtSignal()
+    queue_shown = pyqtSignal(bool)      # the window shows the dock for the queue even if the pane is off
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -588,47 +593,13 @@ class RightDockPanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-
-        # ── Top Segmented Pill Header ──
-        top_bar = QWidget()
-        top_bar.setStyleSheet("background: #242426; border-bottom: 1px solid #3a3a3c;")
-        tb_layout = QHBoxLayout(top_bar)
-        tb_layout.setContentsMargins(6, 4, 6, 4)
-        tb_layout.setSpacing(4)
-
-        self.btn_mode_preview = QPushButton("👁️ Xem trước")
-        self.btn_mode_preview.setCheckable(True)
-        self.btn_mode_preview.setChecked(True)
-        self.btn_mode_preview.setToolTip("Xem trước chi tiết ảnh/video, thông số EXIF")
-
-        self.btn_mode_queue = QPushButton("🔢 Hàng đợi Đổi tên")
-        self.btn_mode_queue.setCheckable(True)
-        self.btn_mode_queue.setChecked(False)
-        self.btn_mode_queue.setToolTip("Mở dãy hàng đợi kéo thả đánh số thứ tự")
-
-        for btn in (self.btn_mode_preview, self.btn_mode_queue):
-            btn.setFixedHeight(26)
-            btn.setStyleSheet(
-                "QPushButton { background: transparent; color: #8e8e93; border: 1px solid transparent; "
-                "border-radius: 5px; padding: 2px 10px; font-size: 8.5pt; font-weight: 600; }"
-                "QPushButton:checked { background: #3a3a3c; color: #0a84ff; border-color: #0a84ff; }"
-                "QPushButton:hover:!checked { background: #2c2c2e; color: #d1d1d6; }"
-            )
-            tb_layout.addWidget(btn)
-
-        self.btn_mode_preview.clicked.connect(lambda: self.set_mode("preview"))
-        self.btn_mode_queue.clicked.connect(lambda: self.set_mode("queue"))
-
-        layout.addWidget(top_bar)
-
-        # ── Stack: Page 0 (Preview), Page 1 (Queue) ──
         self.stack = QStackedWidget()
 
-        self.preview_panel = PreviewPanel(self)
-        self.stack.addWidget(self.preview_panel)  # Index 0
+        self.details_pane = DetailsPane(self)
+        self.stack.addWidget(self.details_pane)   # Index 0
 
         self.queue_dock = QueueDockWidget(self)
-        self.queue_dock.close_requested.connect(lambda: self.set_mode("preview"))
+        self.queue_dock.close_requested.connect(self._close_queue)
         self.queue_dock.file_selected.connect(self._on_queue_item_selected)
         self.queue_dock.queue_completed.connect(self.queue_completed.emit)
         self.stack.addWidget(self.queue_dock)     # Index 1
@@ -636,31 +607,37 @@ class RightDockPanel(QWidget):
         layout.addWidget(self.stack)
 
     def set_mode(self, mode: str):
-        """Switch between 'preview' and 'queue' modes."""
-        if mode == "queue":
-            self.stack.setCurrentIndex(1)
-            self.btn_mode_preview.setChecked(False)
-            self.btn_mode_queue.setChecked(True)
-        else:
-            self.stack.setCurrentIndex(0)
-            self.btn_mode_preview.setChecked(True)
-            self.btn_mode_queue.setChecked(False)
+        """'queue' shows the rename queue; anything else returns to the details/preview pane."""
+        was_queue = self.is_queue_mode()
+        self.stack.setCurrentIndex(1 if mode == "queue" else 0)
+        if was_queue != self.is_queue_mode():
+            self.queue_shown.emit(self.is_queue_mode())
+
+    def _close_queue(self):
+        self.set_mode("details")
+
+    def set_pane_mode(self, mode: str):
+        """'details' or 'preview' (Explorer's two panes)."""
+        self.details_pane.set_mode(mode)
 
     def is_queue_mode(self) -> bool:
         return self.stack.currentIndex() == 1
 
     def show_file(self, path: Path):
-        """Pass selected file to PreviewPanel (and optionally highlight in queue)."""
-        self.preview_panel.show_file(path)
+        self.details_pane.show_items([path], path.parent)
+
+    def show_selection(self, paths: list[Path], folder: Optional[Path]):
+        self.details_pane.show_items(paths, folder)
 
     def _on_queue_item_selected(self, path: Path):
-        """When user clicks an item in the queue dock, show preview."""
-        self.preview_panel.show_file(path)
+        """When user clicks an item in the queue dock, show it in the details pane."""
+        self.details_pane.show_items([path], path.parent)
         self.file_preview_requested.emit(path)
 
     def set_folder(self, folder: Path):
-        """Sync folder with QueueDockWidget."""
+        """Sync folder with QueueDockWidget and show the folder's details."""
         self.queue_dock.set_folder(folder)
+        self.details_pane.show_items([], folder)
 
     def open_queue_with_folder(self, folder: Path, sync: bool = False):
         """Directly open queue mode and load all files in folder."""

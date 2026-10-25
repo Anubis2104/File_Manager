@@ -32,6 +32,7 @@ from core.logger   import RenameLogger
 from core.workers  import RenameWorker
 from utils.file_utils import RenameOperation, IMAGE_EXTS, VIDEO_EXTS
 from ui.widgets.progress_dialog import TaskProgressDialog
+from ui.theme import qcolor, style
 
 
 class SourcePoolList(QListWidget):
@@ -40,12 +41,12 @@ class SourcePoolList(QListWidget):
         super().__init__(parent)
         self.setDragEnabled(True)
         self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.setStyleSheet(
-            "QListWidget { background-color: #1c1c1e; border: 1px solid #3a3a3c; "
+        style(self, 
+            "QListWidget { background-color: @bg_base; border: 1px solid @stroke_control; "
             "border-radius: 6px; padding: 4px; }"
-            "QListWidget::item { padding: 6px; border-bottom: 1px solid #2c2c2e; border-radius: 4px; }"
-            "QListWidget::item:hover { background-color: #2c2c2e; }"
-            "QListWidget::item:selected { background-color: #0a84ff; color: white; }"
+            "QListWidget::item { padding: 6px; border-bottom: 1px solid @stroke_divider; border-radius: 4px; }"
+            "QListWidget::item:hover { background-color: @fill_hover; }"
+            "QListWidget::item:selected { background-color: @fill_selected; color: @text_primary; }"
         )
 
     def startDrag(self, supportedActions):
@@ -78,9 +79,9 @@ class QueueTableWidget(QTableWidget):
         self.setAcceptDrops(True)
         self.setDragDropMode(QAbstractItemView.DragDropMode.DropOnly)
         self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.setStyleSheet(
-            "QTableWidget { background-color: #1c1c1e; gridline-color: #2c2c2e; "
-            "border: 1px solid #3a3a3c; border-radius: 6px; }"
+        style(self, 
+            "QTableWidget { background-color: @bg_base; gridline-color: @stroke_divider; "
+            "border: 1px solid @stroke_control; border-radius: 6px; }"
             "QTableWidget::item { padding: 4px 6px; }"
         )
 
@@ -162,8 +163,8 @@ class QueueRenameDialog(QDialog):
 
         # ── Header bar: Title & Configuration ──
         header_group = QGroupBox(f"📁 Thư mục: {self.folder.name} ({self.total_count} tệp)")
-        header_group.setStyleSheet(
-            "QGroupBox { font-weight: 600; font-size: 9pt; border: 1px solid #3a3a3c; "
+        style(header_group, 
+            "QGroupBox { font-weight: 600; font-size: 9pt; border: 1px solid @stroke_control; "
             "border-radius: 6px; margin-top: 8px; padding-top: 6px; }"
             "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; }"
         )
@@ -216,7 +217,7 @@ class QueueRenameDialog(QDialog):
         left_layout.setSpacing(6)
 
         self.lbl_pool_count = QLabel("📦 Kho tệp nguồn (Kéo hoặc Double-click để xếp):")
-        self.lbl_pool_count.setStyleSheet("font-weight: 600; color: #8e8e93; font-size: 8.5pt;")
+        style(self.lbl_pool_count, "font-weight: 600; color: @text_secondary; font-size: 8.5pt;")
         left_layout.addWidget(self.lbl_pool_count)
 
         self.pool_search = QLineEdit()
@@ -242,7 +243,7 @@ class QueueRenameDialog(QDialog):
         right_layout.setSpacing(6)
 
         self.lbl_queue_count = QLabel(f"🔢 Hàng đợi thứ tự ({self.total_count} vị trí):")
-        self.lbl_queue_count.setStyleSheet("font-weight: 600; color: #5ac8fa; font-size: 8.5pt;")
+        style(self.lbl_queue_count, "font-weight: 600; color: @accent; font-size: 8.5pt;")
         right_layout.addWidget(self.lbl_queue_count)
 
         self.queue_table = QueueTableWidget()
@@ -272,7 +273,7 @@ class QueueRenameDialog(QDialog):
         bottom_bar.setSpacing(10)
 
         self.lbl_status = QLabel("")
-        self.lbl_status.setStyleSheet("color: #8e8e93; font-size: 8.5pt;")
+        style(self.lbl_status, "color: @text_secondary; font-size: 8.5pt;")
         bottom_bar.addWidget(self.lbl_status)
 
         bottom_bar.addStretch()
@@ -283,11 +284,11 @@ class QueueRenameDialog(QDialog):
 
         self.btn_execute = QPushButton("✔  Thực hiện đổi tên theo thứ tự")
         self.btn_execute.setObjectName("btnPrimary")
-        self.btn_execute.setStyleSheet(
-            "QPushButton#btnPrimary { background-color: #0a84ff; color: white; "
+        style(self.btn_execute, 
+            "QPushButton#btnPrimary { background-color: @accent; color: @text_on_accent; "
             "font-weight: 600; padding: 6px 20px; border-radius: 5px; }"
-            "QPushButton#btnPrimary:hover { background-color: #0071e3; }"
-            "QPushButton#btnPrimary:disabled { background-color: #3a3a3c; color: #636366; }"
+            "QPushButton#btnPrimary:hover { background-color: @accent; }"
+            "QPushButton#btnPrimary:disabled { background-color: @fill_selected; color: @text_tertiary; }"
         )
         self.btn_execute.clicked.connect(self._execute)
         bottom_bar.addWidget(self.btn_execute)
@@ -360,7 +361,7 @@ class QueueRenameDialog(QDialog):
             # Col 0: Seq number badge
             seq_item = QTableWidgetItem(f"#{seq_str}")
             seq_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            seq_item.setForeground(QColor("#0a84ff"))
+            seq_item.setForeground(qcolor("accent"))
             seq_item.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
             self.queue_table.setItem(row, 0, seq_item)
 
@@ -373,7 +374,7 @@ class QueueRenameDialog(QDialog):
                 # Col 2: New planned name
                 new_name = self._compute_slot_new_name(info, seq_num)
                 new_item = QTableWidgetItem(new_name)
-                new_item.setForeground(QColor("#30d158"))
+                new_item.setForeground(qcolor("success"))
                 new_item.setFont(QFont("Segoe UI", 8, QFont.Weight.DemiBold))
                 self.queue_table.setItem(row, 2, new_item)
 
@@ -397,7 +398,7 @@ class QueueRenameDialog(QDialog):
 
                 btn_rm = QPushButton("✖")
                 btn_rm.setFixedSize(22, 20)
-                btn_rm.setStyleSheet("color: #ff453a;")
+                style(btn_rm, "color: @danger;")
                 btn_rm.clicked.connect(lambda ch, r=row: self._clear_slot(r))
                 act_layout.addWidget(btn_rm)
 
@@ -405,11 +406,11 @@ class QueueRenameDialog(QDialog):
             else:
                 # Empty slot
                 orig_item = QTableWidgetItem("— Trống (Kéo thả tệp vào đây) —")
-                orig_item.setForeground(QColor("#636366"))
+                orig_item.setForeground(qcolor("text_tertiary"))
                 self.queue_table.setItem(row, 1, orig_item)
 
                 new_item = QTableWidgetItem("—")
-                new_item.setForeground(QColor("#48484a"))
+                new_item.setForeground(qcolor("text_disabled"))
                 self.queue_table.setItem(row, 2, new_item)
 
                 self.queue_table.setCellWidget(row, 3, None)
@@ -427,10 +428,10 @@ class QueueRenameDialog(QDialog):
 
         if assigned_count == self.total_count:
             self.lbl_status.setText(f"✅ Đã xếp đủ {self.total_count}/{self.total_count} tệp! Sẵn sàng đổi tên.")
-            self.lbl_status.setStyleSheet("color: #30d158; font-size: 8.5pt;")
+            style(self.lbl_status, "color: @success; font-size: 8.5pt;")
         else:
             self.lbl_status.setText(f"Đã xếp {assigned_count}/{self.total_count} tệp vào hàng đợi.")
-            self.lbl_status.setStyleSheet("color: #8e8e93; font-size: 8.5pt;")
+            style(self.lbl_status, "color: @text_secondary; font-size: 8.5pt;")
 
     # ─────────────────────────────────────────────
     # Slot Interactions (Drag-drop, Double-click, Move)

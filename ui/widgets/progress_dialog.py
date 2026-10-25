@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QProgressBar,
     QPushButton, QFrame, QGraphicsDropShadowEffect, QWidget,
 )
+from ui.theme import style
 
 
 class TaskProgressDialog(QDialog):
@@ -63,7 +64,7 @@ class TaskProgressDialog(QDialog):
         hdr_lay.addWidget(self.lbl_icon)
 
         self.lbl_title = QLabel(title)
-        self.lbl_title.setStyleSheet("font-size: 11pt; font-weight: 700; color: #f2f2f7;")
+        style(self.lbl_title, "font-size: 11pt; font-weight: 700; color: @text_primary;")
         hdr_lay.addWidget(self.lbl_title)
         hdr_lay.addStretch()
 
@@ -71,7 +72,7 @@ class TaskProgressDialog(QDialog):
 
         # ── Status Message & File Name ──
         self.lbl_status = QLabel("Đang chuẩn bị...")
-        self.lbl_status.setStyleSheet("color: #aeaeb2; font-size: 9pt;")
+        style(self.lbl_status, "color: @text_secondary; font-size: 9pt;")
         self.lbl_status.setWordWrap(True)
         layout.addWidget(self.lbl_status)
 
@@ -81,11 +82,11 @@ class TaskProgressDialog(QDialog):
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
         self.progress_bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.progress_bar.setStyleSheet(
-            "QProgressBar { background-color: #2c2c2e; border: 1px solid #3a3a3c; "
-            "border-radius: 8px; text-align: center; color: #ffffff; font-size: 8pt; font-weight: bold; }"
+        style(self.progress_bar, 
+            "QProgressBar { background-color: @fill_hover; border: 1px solid @stroke_control; "
+            "border-radius: 8px; text-align: center; color: @text_primary; font-size: 8pt; font-weight: bold; }"
             "QProgressBar::chunk { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
-            "stop:0 #0a84ff, stop:1 #30d158); border-radius: 7px; }"
+            "stop:0 @accent, stop:1 @success); border-radius: 7px; }"
         )
         layout.addWidget(self.progress_bar)
 
@@ -93,18 +94,18 @@ class TaskProgressDialog(QDialog):
         footer_lay = QHBoxLayout()
 
         self.lbl_counter = QLabel("0 / 0 (0%)")
-        self.lbl_counter.setStyleSheet("color: #8e8e93; font-size: 8.5pt;")
+        style(self.lbl_counter, "color: @text_secondary; font-size: 8.5pt;")
         footer_lay.addWidget(self.lbl_counter)
         footer_lay.addStretch()
 
         self.btn_cancel = QPushButton("✕  Hủy bỏ")
         self.btn_cancel.setFixedHeight(28)
         self.btn_cancel.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_cancel.setStyleSheet(
-            "QPushButton { background: #3a3a3c; color: #ff453a; border: 1px solid #48484a; "
+        style(self.btn_cancel, 
+            "QPushButton { background: @fill_selected; color: @danger; border: 1px solid @stroke_control; "
             "border-radius: 5px; padding: 2px 14px; font-size: 8.5pt; font-weight: 600; }"
-            "QPushButton:hover { background: #ff453a; color: white; border-color: #ff453a; }"
-            "QPushButton:disabled { background: #2c2c2e; color: #636366; border-color: #3a3a3c; }"
+            "QPushButton:hover { background: @danger; color: @text_on_accent; border-color: @danger; }"
+            "QPushButton:disabled { background: @fill_hover; color: @text_tertiary; border-color: @stroke_control; }"
         )
         self.btn_cancel.clicked.connect(self._on_cancel_clicked)
         footer_lay.addWidget(self.btn_cancel)
@@ -114,8 +115,8 @@ class TaskProgressDialog(QDialog):
         # Default dark dialog style
         self.setObjectName("TaskProgressDialog")
         self.setAutoFillBackground(True)
-        self.setStyleSheet(
-            "#TaskProgressDialog, QDialog { background-color: #1c1c1e; color: #f2f2f7; border: 1px solid #3a3a3c; border-radius: 8px; }\n"
+        style(self, 
+            "#TaskProgressDialog, QDialog { background-color: @bg_base; color: @text_primary; border: 1px solid @stroke_control; border-radius: 8px; }\n"
             "QLabel { background: transparent; }"
         )
 

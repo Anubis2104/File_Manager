@@ -281,27 +281,34 @@ class TestAuditOptimizations(unittest.TestCase):
         from core.metadata import (
             strip_video_metadata_with_ffmpeg,
             write_video_metadata_with_ffmpeg,
-            MetadataEngine
+            MetadataEngine,
+            resolve_ffmpeg_exe,
+            resolve_ffprobe_exe,
         )
+
+        ffmpeg_bin = resolve_ffmpeg_exe()
+        ffprobe_bin = resolve_ffprobe_exe()
+        if not os.path.isfile(ffmpeg_bin) or not os.path.isfile(ffprobe_bin):
+            self.skipTest("FFmpeg/FFprobe binary not available for synthetic MKV test")
 
         test_mkv = self.temp_dir / "sample_test.mkv"
         # Create a 1-second synthetic MKV file with initial metadata
         cmd_create = [
-            "ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=black:s=160x120:d=1",
+            ffmpeg_bin, "-y", "-f", "lavfi", "-i", "color=c=black:s=160x120:d=1",
             "-c:v", "libx264", "-metadata", "title=InitialTitle",
             "-metadata", "artist=InitialArtist",
             str(test_mkv)
         ]
         r = subprocess.run(cmd_create, capture_output=True)
         if r.returncode != 0:
-            self.skipTest("FFmpeg binary not available for synthetic MKV test")
+            self.skipTest("FFmpeg binary failed to create synthetic MKV")
 
         # 1. Test strip_video_metadata_with_ffmpeg
         ok, err = strip_video_metadata_with_ffmpeg(test_mkv)
         self.assertTrue(ok, f"strip_video_metadata_with_ffmpeg failed: {err}")
 
         probe_r = subprocess.run(
-            ["ffprobe", "-v", "quiet", "-show_entries", "format_tags=title:format_tags=artist", "-of", "default=noprint_wrappers=1:nokey=1", str(test_mkv)],
+            [ffprobe_bin, "-v", "quiet", "-show_entries", "format_tags=title:format_tags=artist", "-of", "default=noprint_wrappers=1:nokey=1", str(test_mkv)],
             capture_output=True, text=True
         )
         self.assertNotIn("InitialTitle", probe_r.stdout)
@@ -317,7 +324,7 @@ class TestAuditOptimizations(unittest.TestCase):
         self.assertTrue(ok2, f"write_video_metadata_with_ffmpeg failed: {err2}")
 
         probe_r2 = subprocess.run(
-            ["ffprobe", "-v", "quiet", "-show_entries", "format_tags=artist:format_tags=title:format_tags=creation_time", "-of", "default=noprint_wrappers=1:nokey=0", str(test_mkv)],
+            [ffprobe_bin, "-v", "quiet", "-show_entries", "format_tags=artist:format_tags=title:format_tags=creation_time", "-of", "default=noprint_wrappers=1:nokey=0", str(test_mkv)],
             capture_output=True, text=True
         )
         self.assertIn("VerifiedArtist", probe_r2.stdout)
@@ -327,6 +334,68 @@ class TestAuditOptimizations(unittest.TestCase):
         engine = MetadataEngine()
         ok3, dt3, err3 = engine.safe_strip(test_mkv)
         self.assertTrue(ok3, f"safe_strip failed on MKV: {err3}")
+
+    def test_winget_ffmpeg_ffprobe_discovery(self):
+        """resolve_ffmpeg_exe/resolve_ffprobe_exe find WinGet binaries that are not on PATH."""
+        from unittest import mock
+        import utils.media_info as media_info
+        from core.metadata import resolve_ffmpeg_exe, resolve_ffprobe_exe
+
+        # Hermetic fake WinGet layout: %LOCALAPPDATA%\Microsoft\WinGet\Packages\<pkg>\<build>\bin\
+        local_app_data = self.temp_dir / "LocalAppData"
+        bin_dir = (local_app_data / "Microsoft" / "WinGet" / "Packages"
+                   / "Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe" / "ffmpeg-9.0-full_build" / "bin")
+        bin_dir.mkdir(parents=True)
+        for exe in ("ffmpeg.exe", "ffprobe.exe"):
+            (bin_dir / exe).write_bytes(b"")
+        empty_app_dir = self.temp_dir / "app"
+        empty_app_dir.mkdir()
+
+        with mock.patch.dict(os.environ, {"LOCALAPPDATA": str(local_app_data)}), \
+             mock.patch.object(media_info.shutil, "which", return_value=None), \
+             mock.patch("utils.file_utils.get_app_dir", return_value=empty_app_dir), \
+             mock.patch.object(media_info, "_RESOLVED_FFMPEG", None), \
+             mock.patch.object(media_info, "_RESOLVED_FFPROBE", None):
+            self.assertEqual(Path(resolve_ffmpeg_exe()), (bin_dir / "ffmpeg.exe").resolve())
+            self.assertEqual(Path(resolve_ffprobe_exe()), (bin_dir / "ffprobe.exe").resolve())
+
+    def _engine_with_failing_exiftool(self):
+        """MetadataEngine whose ExifTool looks installed but cannot be launched (OSError)."""
+        from core.metadata import MetadataEngine
+
+        engine = MetadataEngine()
+        engine.is_exiftool_available = lambda: True
+
+        def _blocked(*_a, **_kw):
+            raise PermissionError("exiftool blocked")
+
+        engine._run_exiftool = _blocked
+        return engine
+
+    def test_restore_date_falls_back_to_piexif_when_exiftool_cannot_start(self):
+        """An OSError launching ExifTool still writes EXIF dates into a JPEG via piexif."""
+        import piexif
+        from datetime import datetime
+
+        jpg = self.temp_dir / "photo.jpg"
+        Image.new("RGB", (8, 8), "red").save(jpg)
+        dt = datetime(2021, 5, 4, 13, 14, 15)
+
+        ok, err = self._engine_with_failing_exiftool().restore_date_to_metadata(jpg, dt)
+
+        self.assertTrue(ok, err)
+        exif = piexif.load(str(jpg))
+        self.assertEqual(exif["Exif"][piexif.ExifIFD.DateTimeOriginal], b"2021:05:04 13:14:15")
+
+    def test_strip_metadata_reports_failure_when_exiftool_cannot_start(self):
+        """An OSError launching ExifTool is a failed strip — never a crash or a false success."""
+        tif = self.temp_dir / "scan.tiff"
+        Image.new("RGB", (8, 8), "blue").save(tif)
+
+        ok, err = self._engine_with_failing_exiftool().strip_metadata(tif)
+
+        self.assertFalse(ok)
+        self.assertIn("exiftool blocked", err)
 
     def test_safe_strip_with_unicode_and_brackets(self):
         """Verify safe_strip and date restoration succeed on paths with brackets and Unicode/CJK."""

@@ -22,6 +22,7 @@ from PyQt6.QtWidgets import (
 )
 
 from core.app_logcat import AppLogcat, LogRecord, LogLevel
+from ui.theme import style, tok
 
 
 class LogcatDialog(QDialog):
@@ -30,14 +31,15 @@ class LogcatDialog(QDialog):
     Invoked via F12 or Toolbar Menu.
     """
 
-    LEVEL_COLORS = {
-        LogLevel.VERBOSE: "#8e8e93",
-        LogLevel.DEBUG:   "#5ac8fa",
-        LogLevel.INFO:    "#30d158",
-        LogLevel.WARN:    "#ff9f0a",
-        LogLevel.ERROR:   "#ff453a",
-        LogLevel.FATAL:   "#bf5af2",
+    # Token names (resolved per record so the log follows light/dark switches)
+    LEVEL_TOKENS = {
+        LogLevel.VERBOSE: "text_secondary",
+        LogLevel.DEBUG:   "accent",
+        LogLevel.INFO:    "success",
+        LogLevel.WARN:    "warning",
+        LogLevel.ERROR:   "danger",
     }
+    FATAL_COLOR = "#bf5af2"
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -125,11 +127,11 @@ class LogcatDialog(QDialog):
         self.log_text = QPlainTextEdit()
         self.log_text.setReadOnly(True)
         self.log_text.setFont(QFont("Cascadia Code", 9) if QFont("Cascadia Code").exactMatch() else QFont("Consolas", 9.5))
-        self.log_text.setStyleSheet("""
+        style(self.log_text, """
             QPlainTextEdit {
-                background-color: #1a1a1c;
-                color: #e5e5ea;
-                border: 1px solid #3a3a3c;
+                background-color: @bg_base;
+                color: @text_primary;
+                border: 1px solid @stroke_control;
                 border-radius: 6px;
                 padding: 6px;
                 line-height: 1.35;
@@ -140,12 +142,12 @@ class LogcatDialog(QDialog):
         # ── Status Footer ──
         footer = QHBoxLayout()
         self.lbl_status = QLabel(f"File log: {self.logcat.log_file_path.name}")
-        self.lbl_status.setStyleSheet("color: #8e8e93; font-size: 8pt;")
+        style(self.lbl_status, "color: @text_secondary; font-size: 8pt;")
         footer.addWidget(self.lbl_status)
         footer.addStretch()
 
         lbl_hint = QLabel("Phím tắt: F12 để đóng/mở • Đỏ: Error/Freeze • Vàng: Warn • Xanh: Info")
-        lbl_hint.setStyleSheet("color: #636366; font-size: 8pt;")
+        style(lbl_hint, "color: @text_tertiary; font-size: 8pt;")
         footer.addWidget(lbl_hint)
         root_layout.addLayout(footer)
 
@@ -173,16 +175,19 @@ class LogcatDialog(QDialog):
         return True
 
     def _render_record(self, rec: LogRecord):
-        color = self.LEVEL_COLORS.get(rec.level, "#e5e5ea")
+        if rec.level == LogLevel.FATAL:
+            color = self.FATAL_COLOR
+        else:
+            color = tok(self.LEVEL_TOKENS.get(rec.level, "text_primary"))
         time_str = rec.timestamp.strftime("%H:%M:%S.%f")[:-3]
         thread_label = "Main" if rec.is_main_thread else rec.thread_name
         
         # HTML formatting with color-coded badges
         html = (
-            f"<span style='color: #636366;'>{time_str}</span> "
+            f"<span style='color: {tok('text_tertiary')};'>{time_str}</span> "
             f"<b style='color: {color};'>[{rec.level.short_name}]</b> "
-            f"<span style='color: #a1a1a6;'>[{thread_label:^6}]</span> "
-            f"<b style='color: #0a84ff;'>[{rec.tag}]</b> "
+            f"<span style='color: {tok('text_secondary')};'>[{thread_label:^6}]</span> "
+            f"<b style='color: {tok('accent')};'>[{rec.tag}]</b> "
             f"<span style='color: {color};'>{rec.message}</span>"
         )
         self.log_text.appendHtml(html)
@@ -211,7 +216,7 @@ class LogcatDialog(QDialog):
     def _toggle_pause(self):
         self.is_paused = not self.is_paused
         self.btn_pause.setText("▶ Tiếp tục" if self.is_paused else "⏸ Tạm dừng")
-        self.btn_pause.setStyleSheet("color: #30d158;" if self.is_paused else "")
+        style(self.btn_pause, "color: @success;" if self.is_paused else "")
 
     def _clear_view(self):
         self.log_text.clear()

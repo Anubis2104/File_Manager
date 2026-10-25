@@ -42,6 +42,28 @@ def setup_qt_compatibility() -> str:
         sys.modules["PyQt6.QtCore"] = _core
         sys.modules["PyQt6.QtGui"] = _gui
         sys.modules["PyQt6.QtWidgets"] = _widgets
+
+        try:
+            import PySide6.QtSvg as _svg
+            _PyQt6Namespace.QtSvg = _svg
+            sys.modules["PyQt6.QtSvg"] = _svg
+        except ImportError:
+            pass
+
+        try:
+            import PySide6.QtMultimedia as _multimedia
+            _PyQt6Namespace.QtMultimedia = _multimedia
+            sys.modules["PyQt6.QtMultimedia"] = _multimedia
+        except ImportError:
+            pass
+
+        try:
+            import PySide6.QtMultimediaWidgets as _mmwidgets
+            _PyQt6Namespace.QtMultimediaWidgets = _mmwidgets
+            sys.modules["PyQt6.QtMultimediaWidgets"] = _mmwidgets
+        except ImportError:
+            pass
+
         return "PySide6"
     except ImportError:
         return "None"

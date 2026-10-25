@@ -23,6 +23,7 @@ from ui.widgets.svg_icons import get_svg_icon, get_svg_pixmap
 from utils.file_utils import IMAGE_EXTS, VIDEO_EXTS, classify_extension
 from utils.media_info import get_media_dimensions
 from utils.date_utils import extract_best_date
+from ui.theme import style, tok
 
 
 class QuickLookDialog(QDialog):
@@ -58,10 +59,10 @@ class QuickLookDialog(QDialog):
         # ── Main container frame with dark glassmorphism ──
         self.container = QFrame(self)
         self.container.setObjectName("quickLookContainer")
-        self.container.setStyleSheet(
+        style(self.container, 
             "#quickLookContainer { "
             "   background-color: rgba(15, 23, 42, 0.96); "
-            "   border: 1px solid #334155; "
+            "   border: 1px solid @stroke_control; "
             "   border-radius: 14px; "
             "}"
         )
@@ -85,8 +86,8 @@ class QuickLookDialog(QDialog):
         header.addWidget(self.lbl_type_icon)
 
         self.lbl_filename = QLabel("Filename.ext")
-        self.lbl_filename.setStyleSheet(
-            "color: #f8fafc; font-size: 11pt; font-weight: 600; font-family: 'Segoe UI', 'Inter';"
+        style(self.lbl_filename, 
+            "color: @text_primary; font-size: 11pt; font-weight: 600; font-family: 'Segoe UI', 'Inter';"
         )
         self.lbl_filename.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         header.addWidget(self.lbl_filename)
@@ -98,26 +99,26 @@ class QuickLookDialog(QDialog):
 
         # Open in default app button
         self.btn_open = QPushButton(" Mở tệp (O)")
-        self.btn_open.setIcon(get_svg_icon("external_link", "#38bdf8", 16))
+        self.btn_open.setIcon(get_svg_icon("external_link", tok("accent"), 16))
         self.btn_open.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_open.setStyleSheet(
+        style(self.btn_open, 
             "QPushButton { "
-            "   background-color: #1e293b; color: #38bdf8; border: 1px solid #334155; "
+            "   background-color: @fill_hover; color: @accent; border: 1px solid @stroke_control; "
             "   border-radius: 6px; padding: 5px 12px; font-size: 8.5pt; font-weight: 500; "
             "} "
-            "QPushButton:hover { background-color: #334155; border-color: #38bdf8; }"
+            "QPushButton:hover { background-color: @fill_selected; border-color: @accent; }"
         )
         self.btn_open.clicked.connect(self._open_in_default_app)
         header.addWidget(self.btn_open)
 
         # Close button
         self.btn_close = QToolButton()
-        self.btn_close.setIcon(get_svg_icon("close", "#94a3b8", 16))
+        self.btn_close.setIcon(get_svg_icon("close", tok("text_secondary"), 16))
         self.btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_close.setFixedSize(28, 28)
-        self.btn_close.setStyleSheet(
+        style(self.btn_close, 
             "QToolButton { background: transparent; border: none; border-radius: 6px; } "
-            "QToolButton:hover { background: #334155; }"
+            "QToolButton:hover { background: @fill_selected; }"
         )
         self.btn_close.clicked.connect(self.close)
         header.addWidget(self.btn_close)
@@ -126,8 +127,8 @@ class QuickLookDialog(QDialog):
 
         # ── Body Display Area ──
         self.body_frame = QFrame()
-        self.body_frame.setStyleSheet(
-            "background-color: #0b0f19; border: 1px solid #1e293b; border-radius: 10px;"
+        style(self.body_frame, 
+            "background-color: @bg_base; border: 1px solid @stroke_divider; border-radius: 10px;"
         )
         self.body_lay = QVBoxLayout(self.body_frame)
         self.body_lay.setContentsMargins(10, 10, 10, 10)
@@ -143,8 +144,8 @@ class QuickLookDialog(QDialog):
         # Text preview
         self.txt_preview = QPlainTextEdit()
         self.txt_preview.setReadOnly(True)
-        self.txt_preview.setStyleSheet(
-            "background: transparent; border: none; color: #e2e8f0; font-family: 'Consolas', monospace; font-size: 9pt;"
+        style(self.txt_preview, 
+            "background: transparent; border: none; color: @text_primary; font-family: 'Consolas', monospace; font-size: 9pt;"
         )
         self.txt_preview.hide()
         self.body_lay.addWidget(self.txt_preview)
@@ -157,7 +158,7 @@ class QuickLookDialog(QDialog):
         self.lbl_info_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_info_text = QLabel()
         self.lbl_info_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.lbl_info_text.setStyleSheet("color: #94a3b8; font-size: 9.5pt;")
+        style(self.lbl_info_text, "color: @text_secondary; font-size: 9.5pt;")
         self.info_lay.addWidget(self.lbl_info_icon)
         self.info_lay.addWidget(self.lbl_info_text)
         self.info_widget.hide()
@@ -168,13 +169,13 @@ class QuickLookDialog(QDialog):
         # ── Footer Bar ──
         footer = QHBoxLayout()
         self.lbl_counter = QLabel("0 / 0")
-        self.lbl_counter.setStyleSheet("color: #64748b; font-size: 8.5pt; font-weight: 500;")
+        style(self.lbl_counter, "color: @text_tertiary; font-size: 8.5pt; font-weight: 500;")
         footer.addWidget(self.lbl_counter)
 
         footer.addStretch()
 
         lbl_hint = QLabel("Phím tắt: [← / →] Duyệt file  •  [Space / Esc] Thoát  •  [Enter / O] Mở")
-        lbl_hint.setStyleSheet("color: #64748b; font-size: 8.5pt;")
+        style(lbl_hint, "color: @text_tertiary; font-size: 8.5pt;")
         footer.addWidget(lbl_hint)
 
         container_lay.addLayout(footer)
@@ -230,7 +231,7 @@ class QuickLookDialog(QDialog):
         size_str = f"{size_mb:.2f} MB" if size_mb >= 1 else f"{stat.st_size / 1024:.1f} KB"
 
         # Add size badge
-        self._add_badge(size_str, "#334155", "#cbd5e1")
+        self._add_badge(size_str, tok("fill_selected"), tok("text_secondary"))
 
         if media_type == "image":
             self._render_image(path)
@@ -252,16 +253,16 @@ class QuickLookDialog(QDialog):
         self.badge_container.addWidget(lbl)
 
     def _render_image(self, path: Path):
-        self.lbl_type_icon.setPixmap(get_svg_pixmap("image", "#38bdf8", 24))
-        self._add_badge(path.suffix.upper().lstrip("."), "#0369a1", "#ffffff")
+        self.lbl_type_icon.setPixmap(get_svg_pixmap("image", tok("accent"), 24))
+        self._add_badge(path.suffix.upper().lstrip("."), tok("fill_selected"), tok("text_primary"))
 
         dims = get_media_dimensions(path)
         if dims:
-            self._add_badge(f"{dims.width} × {dims.height}", "#1e293b", "#38bdf8")
+            self._add_badge(f"{dims.width} × {dims.height}", tok("fill_hover"), tok("accent"))
             if dims.width >= 3840 or dims.height >= 2160:
-                self._add_badge("4K UHD", "#065f46", "#34d399")
+                self._add_badge("4K UHD", tok("success_bg"), tok("success"))
             elif dims.width >= 1920 or dims.height >= 1080:
-                self._add_badge("FHD", "#064e3b", "#6ee7b7")
+                self._add_badge("FHD", tok("success_bg"), tok("success"))
 
         try:
             pix = QPixmap(str(path))
@@ -282,9 +283,9 @@ class QuickLookDialog(QDialog):
         self._render_generic(path, "image")
 
     def _render_raw(self, path: Path):
-        self.lbl_type_icon.setPixmap(get_svg_pixmap("camera", "#f59e0b", 24))
-        self._add_badge("RAW", "#78350f", "#fbbf24")
-        self._add_badge(path.suffix.upper().lstrip("."), "#1e293b", "#cbd5e1")
+        self.lbl_type_icon.setPixmap(get_svg_pixmap("camera", tok("warning"), 24))
+        self._add_badge("RAW", tok("warning_bg"), tok("warning"))
+        self._add_badge(path.suffix.upper().lstrip("."), tok("fill_hover"), tok("text_secondary"))
 
         try:
             import rawpy
@@ -311,7 +312,7 @@ class QuickLookDialog(QDialog):
     def _render_video(self, path: Path):
         self.lbl_type_icon.setPixmap(get_svg_pixmap("video", "#a855f7", 24))
         self._add_badge("VIDEO", "#581c87", "#e9d5ff")
-        self._add_badge(path.suffix.upper().lstrip("."), "#1e293b", "#cbd5e1")
+        self._add_badge(path.suffix.upper().lstrip("."), tok("fill_hover"), tok("text_secondary"))
 
         dims = get_media_dimensions(path)
         info_lines = [f"<b>{path.name}</b>"]
@@ -320,7 +321,7 @@ class QuickLookDialog(QDialog):
             if dims.duration_secs > 0:
                 m, s = divmod(int(dims.duration_secs), 60)
                 dur_str = f"{m:02d}:{s:02d}"
-                self._add_badge(dur_str, "#1e293b", "#c084fc")
+                self._add_badge(dur_str, tok("fill_hover"), "#c084fc")
                 info_lines.append(f"Thời lượng: {dur_str}")
 
         self.lbl_info_icon.setPixmap(get_svg_pixmap("video", "#c084fc", 64))
@@ -328,8 +329,8 @@ class QuickLookDialog(QDialog):
         self.info_widget.show()
 
     def _render_text(self, path: Path):
-        self.lbl_type_icon.setPixmap(get_svg_pixmap("file", "#38bdf8", 24))
-        self._add_badge("TEXT", "#1e293b", "#38bdf8")
+        self.lbl_type_icon.setPixmap(get_svg_pixmap("file", tok("accent"), 24))
+        self._add_badge("TEXT", tok("fill_hover"), tok("accent"))
 
         try:
             with open(path, "r", encoding="utf-8", errors="replace") as f:
@@ -341,10 +342,10 @@ class QuickLookDialog(QDialog):
             self._render_generic(path, f"Lỗi đọc text: {e}")
 
     def _render_generic(self, path: Path, desc: str):
-        self.lbl_type_icon.setPixmap(get_svg_pixmap("file", "#94a3b8", 24))
-        self._add_badge(path.suffix.upper().lstrip(".") or "FILE", "#1e293b", "#cbd5e1")
+        self.lbl_type_icon.setPixmap(get_svg_pixmap("file", tok("text_secondary"), 24))
+        self._add_badge(path.suffix.upper().lstrip(".") or "FILE", tok("fill_hover"), tok("text_secondary"))
 
-        self.lbl_info_icon.setPixmap(get_svg_pixmap("file", "#64748b", 64))
+        self.lbl_info_icon.setPixmap(get_svg_pixmap("file", tok("text_tertiary"), 64))
         dt, _ = extract_best_date(path)
         date_str = dt.strftime("%d/%m/%Y %H:%M:%S") if dt else "Không xác định"
 

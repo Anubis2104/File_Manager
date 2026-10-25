@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional
 
 from PIL import Image
+from utils.media_info import resolve_ffmpeg_exe
 from utils.safe_log import log_swallowed
 Image.MAX_IMAGE_PIXELS = None
 
@@ -135,16 +136,8 @@ class VideoConverter:
 
     @staticmethod
     def _find_ffmpeg_cmd() -> str:
-        """Find working ffmpeg executable from local project or system PATH."""
-        candidates = [
-            Path(__file__).parent.parent / "ffmpeg.exe",
-            Path(__file__).parent.parent / "utils" / "ffmpeg.exe",
-            Path(r"C:\Tools\ffmpeg\bin\ffmpeg.exe"),
-        ]
-        for c in candidates:
-            if c.is_file():
-                return str(c.resolve())
-        return "ffmpeg"
+        """Find working ffmpeg executable via unified resolver (WinGet, PATH, or local)."""
+        return resolve_ffmpeg_exe()
 
     def convert(
         self,
