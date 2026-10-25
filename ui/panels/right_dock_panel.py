@@ -31,6 +31,7 @@ from core.workers import RenameWorker
 from utils.file_utils import RenameOperation, IMAGE_EXTS, VIDEO_EXTS
 from ui.widgets.progress_dialog import TaskProgressDialog
 from ui.theme import qcolor, style, theme
+from utils.safe_log import log_swallowed
 
 
 class QueueDropTable(QTableWidget):
@@ -89,8 +90,11 @@ class QueueDropTable(QTableWidget):
 
 
 class AsyncThumbnailWorker(QThread):
-    """Asynchronously decodes thumbnails in background so main GUI thread never freezes."""
-    thumbnail_ready = pyqtSignal(Path, QPixmap)
+    """Asynchronously decodes thumbnails in background so main GUI thread never freezes.
+
+    Emits QImage: QPixmap is a GUI-thread-only paint device, so the receiver converts it.
+    """
+    thumbnail_ready = pyqtSignal(Path, QImage)
 
     def __init__(self, paths: list[Path], parent=None):
         super().__init__(parent)
@@ -113,10 +117,9 @@ class AsyncThumbnailWorker(QThread):
                     if img.loadFromData(data):
                         img = img.scaled(36, 36, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
                         if not img.isNull() and not self._cancelled:
-                            pix = QPixmap.fromImage(img)
-                            self.thumbnail_ready.emit(p, pix)
-                except Exception:
-                    pass
+                            self.thumbnail_ready.emit(p, img)
+                except Exception as _bare_exc:
+                    log_swallowed("UI:QueueThumb", _bare_exc)
 
 
 class FolderScanThread(QThread):
@@ -431,7 +434,8 @@ class QueueDockWidget(QWidget):
         self._thumb_worker.thumbnail_ready.connect(self._on_thumbnail_ready)
         self._thumb_worker.start()
 
-    def _on_thumbnail_ready(self, path: Path, pix: QPixmap):
+    def _on_thumbnail_ready(self, path: Path, image: QImage):
+        pix = QPixmap.fromImage(image)                # GUI thread (queued connection)
         self._thumb_cache[path] = pix
         for row, info in enumerate(self.queue_items):
             if info.path == path:
