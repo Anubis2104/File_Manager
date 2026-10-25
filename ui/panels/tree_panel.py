@@ -290,7 +290,10 @@ class TreePanel(QWidget):
             acc = acc / part
             nxt = self._child_with_path(node, acc)
             if nxt is None:                  # hidden or beyond MAX_CHILDREN
-                return node if unfold else None
+                if unfold and acc.is_dir():
+                    nxt = self._add_folder(node, acc.name or str(acc), acc)
+                else:
+                    return node if unfold else None
             node = nxt
         return node
 
