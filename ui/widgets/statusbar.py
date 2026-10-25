@@ -106,6 +106,11 @@ class AppStatusBar(QStatusBar):
         self.btn_details.setChecked(mode == "detail")
         self.btn_large.setChecked(mode == "large")
 
+    def set_cuda_pending(self):
+        """Shown while CUDA is probed in the background at startup."""
+        self.lbl_cuda.setText("GPU…")
+        self.lbl_cuda.setToolTip("Đang kiểm tra GPU CUDA…")
+
     def set_cuda_info(self, info_str: str):
         if "Not available" in info_str or "missing" in info_str:
             self.lbl_cuda.setText("CPU")

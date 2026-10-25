@@ -222,6 +222,40 @@ class MetadataStripWorker(QObject):
 
 
 # ─────────────────────────────────────────────────────────────
+# CUDA Probe Worker
+# ─────────────────────────────────────────────────────────────
+
+class CudaProbe(QObject):
+    """
+    Detect CUDA off the GUI thread: `import torch` + CUDA init take seconds.
+
+    Runs on a daemon Python thread, not a QThread: a window closed during startup must
+    neither wait for torch nor destroy a running QThread (which aborts the process).
+    One process-wide instance that is never deleted, so the worker thread always emits
+    on a live object; receivers that are gone are simply disconnected by Qt.
+    """
+    detected = pyqtSignal(str)               # str(CudaInfo), delivered queued to the GUI thread
+
+    def start(self) -> None:
+        threading.Thread(target=self._run, name="CudaProbe", daemon=True).start()
+
+    def _run(self) -> None:
+        from utils import cuda_helper
+        self.detected.emit(str(cuda_helper.get_cuda_info()))
+
+
+_cuda_probe: Optional[CudaProbe] = None
+
+
+def cuda_probe() -> CudaProbe:
+    """The shared probe; create it on the GUI thread (first call from MainWindow)."""
+    global _cuda_probe
+    if _cuda_probe is None:
+        _cuda_probe = CudaProbe()
+    return _cuda_probe
+
+
+# ─────────────────────────────────────────────────────────────
 # Duplicate Detection Worker
 # ─────────────────────────────────────────────────────────────
 

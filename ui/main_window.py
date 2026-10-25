@@ -38,7 +38,6 @@ from ui.widgets.title_bar       import TitleBar
 from ui.widgets.command_bar     import CommandBar
 from core.file_ops              import invalid_filename_reason
 from ui.win_chrome              import IS_WINDOWS, WindowChrome, set_dark_menus
-from utils.cuda_helper          import get_cuda_info
 from ui.theme import theme, tok
 
 
@@ -297,8 +296,11 @@ class MainWindow(QMainWindow):
     def _build_statusbar(self):
         self.app_statusbar = AppStatusBar(self)
         self.setStatusBar(self.app_statusbar)
-        cuda = get_cuda_info()
-        self.app_statusbar.set_cuda_info(str(cuda))
+        self.app_statusbar.set_cuda_pending()
+        from core.workers import cuda_probe
+        probe = cuda_probe()
+        probe.detected.connect(self.app_statusbar.set_cuda_info)
+        probe.start()
 
     # ─────────────────────────────────────────────
     # Signals
