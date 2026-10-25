@@ -11,7 +11,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-0078D6?style=for-the-badge&logo=windows" alt="Platform Windows" />
-  <img src="https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-3776AB?style=for-the-badge&logo=python" alt="Python" />
+  <img src="https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-3776AB?style=for-the-badge&logo=python" alt="Python" />
   <img src="https://img.shields.io/badge/GUI-PyQt6%20%2F%20PySide6-41CD52?style=for-the-badge&logo=qt" alt="GUI Qt" />
   <img src="https://img.shields.io/badge/AI%20Engine-PyTorch%20%2F%20CUDA-EE4C2C?style=for-the-badge&logo=pytorch" alt="AI PyTorch" />
   <img src="https://img.shields.io/badge/Release-v1.0.0%20Portable-blue?style=for-the-badge" alt="Release" />
