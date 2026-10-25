@@ -256,12 +256,19 @@ def select_best_keeper(group: DupGroup) -> None:
 
 
 def _safe_stat(path: Path) -> dict:
-    """Safely get file size and image dimensions."""
+    """Safely get file size and image/video dimensions."""
     result = {"size": 0, "width": 0, "height": 0}
     try:
         result["size"] = path.stat().st_size
     except OSError:
         pass
+    if classify_extension(path.suffix) == "video":
+        # PIL/rawpy cannot open videos; ffprobe reads the stream size
+        from utils.media_info import get_video_dimensions
+        dims = get_video_dimensions(path)
+        if dims:
+            result["width"], result["height"] = dims.width, dims.height
+        return result
     try:
         from PIL import Image
         Image.MAX_IMAGE_PIXELS = None

@@ -292,3 +292,44 @@ def test_collect_image_paths_includes_video_exts(tmp_path):
     assert "nested.mp4" in names_rec
     assert "nested.jpg" in names_rec
     assert "nested.docx" not in names_rec
+
+
+def test_safe_stat_reads_video_dimensions_without_image_decoders(tmp_path, monkeypatch):
+    """Videos get width/height from ffprobe, not a failed PIL + rawpy attempt per file."""
+    import duplicate.dup_manager as dm
+    import utils.media_info as media_info
+
+    video = tmp_path / "clip.mp4"
+    video.write_bytes(b"\x00" * 64)
+    swallowed: list[BaseException] = []
+    monkeypatch.setattr(dm, "log_swallowed", lambda tag, exc, *a: swallowed.append(exc))
+    monkeypatch.setattr(
+        media_info, "get_video_dimensions",
+        lambda path, ffprobe_exe=None: media_info.MediaDimensions(1920, 1080, "H", 12.5, "video"),
+    )
+
+    stat = dm._safe_stat(video)
+
+    assert (stat["width"], stat["height"], stat["size"]) == (1920, 1080, 64)
+    assert swallowed == []
+
+
+def test_safe_stat_on_real_video_via_ffprobe(tmp_path):
+    import subprocess
+    import duplicate.dup_manager as dm
+    from utils.media_info import resolve_ffmpeg_exe, resolve_ffprobe_exe
+
+    ffmpeg, ffprobe = resolve_ffmpeg_exe(), resolve_ffprobe_exe()
+    if not (os.path.isfile(ffmpeg) and os.path.isfile(ffprobe)):
+        pytest.skip("FFmpeg/FFprobe not installed")
+    video = tmp_path / "clip.mp4"
+    r = subprocess.run(
+        [ffmpeg, "-y", "-f", "lavfi", "-i", "color=c=red:s=320x180:d=1", "-pix_fmt", "yuv420p", str(video)],
+        capture_output=True,
+    )
+    if r.returncode != 0:
+        pytest.skip("FFmpeg could not encode a test clip")
+
+    stat = dm._safe_stat(video)
+
+    assert (stat["width"], stat["height"]) == (320, 180)
