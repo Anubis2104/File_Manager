@@ -298,3 +298,45 @@ def test_status_bar_skips_size_for_huge_selections(app, tmp_path, monkeypatch):
     assert "KB" in bar.lbl_selection.text()
     bar.update_selection(files)
     assert bar.lbl_selection.text() == "4 mục được chọn"
+
+
+# ── Activation: one navigation per double-click ──────────────────
+
+@pytest.mark.parametrize("view_attr", ["grid_view", "detail_view"])
+def test_double_click_on_folder_navigates_once(panel, tmp_path, view_attr):
+    """Qt emits both doubleClicked and activated on a double-click; only one may navigate."""
+    (tmp_path / "Sub").mkdir()
+    panel.load_directory(tmp_path)
+    panel.stack.setCurrentIndex(0 if view_attr == "grid_view" else 1)
+    view = getattr(panel, view_attr)
+    root = view.rootIndex()
+    assert _wait(lambda: panel.model.rowCount(root) == 1)
+    index = panel.model.index(0, 0, root)
+    view.scrollTo(index)
+    QTest.qWait(50)
+
+    spy = QSignalSpy(panel.folder_navigated)
+    pos = view.visualRect(index).center()
+    # A real double-click: Qt ignores the DblClick event unless a press on the same index preceded it
+    QTest.mousePress(view.viewport(), Qt.MouseButton.LeftButton, pos=pos)
+    QTest.mouseRelease(view.viewport(), Qt.MouseButton.LeftButton, pos=pos)
+    QTest.mouseDClick(view.viewport(), Qt.MouseButton.LeftButton, pos=pos)
+    QTest.qWait(50)
+
+    assert [Path(args[0]).name for args in spy] == ["Sub"]
+
+
+def test_enter_key_on_folder_still_navigates(panel, tmp_path):
+    (tmp_path / "Sub").mkdir()
+    panel.load_directory(tmp_path)
+    panel.stack.setCurrentIndex(1)
+    view = panel.detail_view
+    root = view.rootIndex()
+    assert _wait(lambda: panel.model.rowCount(root) == 1)
+    view.setCurrentIndex(panel.model.index(0, 0, root))
+    view.setFocus()
+
+    spy = QSignalSpy(panel.folder_navigated)
+    QTest.keyClick(view, Qt.Key.Key_Return)
+
+    assert [Path(args[0]).name for args in spy] == ["Sub"]

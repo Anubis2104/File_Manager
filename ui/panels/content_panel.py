@@ -212,7 +212,7 @@ class ContentPanel(QWidget):
         self.grid_view.setDragEnabled(True)
         self.grid_view.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
         self.grid_view.clicked.connect(self._on_item_clicked)
-        self.grid_view.doubleClicked.connect(self._on_item_activated)
+        # `activated` covers double-click and Enter; also wiring doubleClicked navigated twice
         self.grid_view.activated.connect(self._on_item_activated)
         self.grid_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.grid_view.customContextMenuRequested.connect(self._on_context_menu)
@@ -251,7 +251,6 @@ class ContentPanel(QWidget):
         for col, width in ((COL_NAME, 320), (COL_DATE, 150), (COL_TYPE, 130), (COL_SIZE, 90)):
             header.resizeSection(col, width)
         self.detail_view.clicked.connect(self._on_item_clicked)
-        self.detail_view.doubleClicked.connect(self._on_item_activated)
         self.detail_view.activated.connect(self._on_item_activated)
         self.detail_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.detail_view.customContextMenuRequested.connect(self._on_context_menu)
