@@ -913,7 +913,8 @@ class MainWindow(QMainWindow):
         self._cancel_current_scan()
 
         from core.workers import ScanWorker, make_scan_thread
-        self._scan_worker = ScanWorker(current, recursive=True, max_workers=8)
+        workers = getattr(self, "scanner_workers", 8)
+        self._scan_worker = ScanWorker(current, recursive=True, max_workers=workers)
         self._scan_thread = make_scan_thread(self._scan_worker)
         self._running_threads.add(self._scan_thread)
 
@@ -951,6 +952,8 @@ class MainWindow(QMainWindow):
         self.app_statusbar.lbl_path.setText(f"Đang quét: {current} ...")
         dlg.show_centered()
         self._scan_thread.start()
+
+    _start_file_scan = _start_scan
 
     def _cancel_current_scan(self):
         if self._scan_worker:

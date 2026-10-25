@@ -8,8 +8,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Callable
 
-from utils.file_utils import classify_extension, IMAGE_EXTS, RAW_EXTS
-from utils.safe_log import log_swallowed
+from utils.file_utils import classify_extension, IMAGE_EXTS, RAW_EXTS, VIDEO_EXTS
+from utils.safe_log import log_swallowed, safe_log
 
 
 @dataclass
@@ -153,7 +153,13 @@ class DupManager:
         if remaining:
             if on_progress:
                 on_progress(0, len(remaining), "Giai đoạn 2: DINOv2 + FAISS...")
-            dino_groups = self.find_duplicates_embedding(remaining, on_progress=on_progress, cancel_check=cancel_check)
+            try:
+                dino_groups = self.find_duplicates_embedding(remaining, on_progress=on_progress, cancel_check=cancel_check)
+            except InterruptedError:
+                raise                        # user cancel, not an engine failure
+            except Exception as exc:
+                safe_log("w", "DupManager", f"DINOv2 embedding stage unavailable or failed, falling back to pHash: {exc}")
+                dino_groups = []
 
         # Merge and re-number
         all_groups = phash_groups + dino_groups
@@ -274,9 +280,9 @@ def _safe_stat(path: Path) -> dict:
 
 
 def collect_image_paths(root: Path, recursive: bool = True) -> list[Path]:
-    """Collect all image and RAW camera file paths from a directory."""
+    """Collect all image, RAW camera, and video file paths from a directory."""
     walker = root.rglob("*") if recursive else root.iterdir()
-    supported = IMAGE_EXTS | RAW_EXTS
+    supported = IMAGE_EXTS | RAW_EXTS | VIDEO_EXTS
     return [
         p for p in walker
         if p.is_file() and p.suffix.lower() in supported

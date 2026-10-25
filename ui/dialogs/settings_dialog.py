@@ -394,6 +394,8 @@ class SettingsDialog(QDialog):
         self.combo_dup_engine.setCurrentIndex(eng_map.get(d.get("default_engine", "both"), 0))
         self.spin_phash.setValue(d.get("phash_threshold", 10))
         self.spin_dino_thresh.setValue(int(d.get("embedding_threshold", 0.95) * 100))
+        model_map = {"dinov2_vits14": 0, "dinov2_vitb14": 1, "dinov2_vitl14": 2}
+        self.combo_dino_model.setCurrentIndex(model_map.get(d.get("dinov2_model", "dinov2_vits14"), 0))
 
         p = self.cfg.get("performance", {})
         self.spin_workers.setValue(p.get("scanner_workers", 8))

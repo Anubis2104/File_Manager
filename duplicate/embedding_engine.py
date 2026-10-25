@@ -19,8 +19,16 @@ except (ImportError, OSError, Exception):
     HAS_TORCH = False
 
 try:
-    import faiss
-    HAS_FAISS = True
+    import faulthandler as _fh
+    _fh_was_enabled = _fh.is_enabled()
+    if _fh_was_enabled:
+        _fh.disable()
+    try:
+        import faiss
+        HAS_FAISS = True
+    finally:
+        if _fh_was_enabled:
+            _fh.enable()
 except ImportError:
     HAS_FAISS = False
 
