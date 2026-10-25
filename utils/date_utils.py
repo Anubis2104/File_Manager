@@ -182,7 +182,7 @@ def get_date_from_exiftool(path: Path, exiftool_exe: str = "exiftool") -> Option
                     return dt
         return None
 
-    except (FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError):
+    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError):
         return None
 
 
